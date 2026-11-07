@@ -55,7 +55,7 @@ window.PRODUCTS = [
     name: 'Toad Venom By Elevé select',
     tag: 'Craft',
     subtitle: 'ANIMAL FACE X SIN MINTZ',
-    description: 'Animal Face x Sin Mintz (LSO, grown in BC by Kingsmen Crew).',
+    description: 'Animal Face x Sin Mintz (LSO, grown in BC by Private Grower).',
     harvestCure: 'Harvest: Oct 04, 2026 · Cold Cured 28 Days',
     scarcityBadge: 'Vault Reserve: 3.5 / 8 lbs remaining',
     terpenes: [
