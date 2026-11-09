@@ -20,6 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="products.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -307,10 +308,12 @@
     <div id="catalog" class="sticky top-16 z-30 bg-white/95 backdrop-blur-md border-b border-brand-border py-3">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-          <button type="button" class="cat-pill active px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-brand-black text-white" data-cat="all">All Drops (4)</button>
-          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="headstash">Headstash (2)</button>
-          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="indoor">Indoor (1)</button>
-          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="doinks">Doinks (1)</button>
+          <button type="button" class="cat-pill active px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-brand-black text-white" data-cat="all" data-label="All Drops">All Drops</button>
+          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="headstash" data-label="Headstash">Headstash</button>
+          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="indoor" data-label="Indoor">Indoor</button>
+          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="doinks" data-label="Doinks">Doinks</button>
+          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="solventless" data-label="Solventless">Solventless</button>
+          <button type="button" class="cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border" data-cat="merch" data-label="Merch & Gear">Merch & Gear</button>
           <button type="button" onclick="openSplitPackModal()" class="px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-brand-canvas hover:bg-brand-hover text-brand-black border border-brand-border flex items-center gap-1.5">
             <span>Split a Pack</span>
             <span class="text-[9px] bg-brand-black text-white px-1.5 rounded-full font-mono">1lb Rate</span>
@@ -723,14 +726,14 @@
         <!-- Image View -->
         <div class="relative h-72 rounded-xl overflow-hidden bg-brand-canvas border border-brand-border">
           <img id="inspectImage" src="" alt="Batch Inspection" class="w-full h-full object-cover">
-          <div class="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-black/75 text-white text-[11px] font-mono backdrop-blur-md">
+          <div id="inspectBadge" class="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-black/75 text-white text-[11px] font-mono backdrop-blur-md">
             Macro Trichome Head & Resin Analysis
           </div>
         </div>
 
         <!-- Sensory Profile & Terpene Breakdown -->
         <div>
-          <h4 class="text-xs font-bold uppercase tracking-wider text-brand-black mb-2">Terpene Profile & Aromatics</h4>
+          <h4 id="inspectAromaticsTitle" class="text-xs font-bold uppercase tracking-wider text-brand-black mb-2">Terpene Profile & Aromatics</h4>
           <div id="inspectTerpenes" class="grid grid-cols-3 gap-2">
             <!-- Populated by JS -->
           </div>
@@ -738,7 +741,7 @@
 
         <!-- Burn & Ash Specs -->
         <div>
-          <h4 class="text-xs font-bold uppercase tracking-wider text-brand-black mb-2">Combustion & Ash Verification</h4>
+          <h4 id="inspectSpecsTitle" class="text-xs font-bold uppercase tracking-wider text-brand-black mb-2">Combustion & Ash Verification</h4>
           <div id="inspectBurnSpecs" class="p-4 rounded-xl bg-brand-canvas border border-brand-border space-y-2 text-xs">
             <!-- Populated by JS -->
           </div>
@@ -1092,6 +1095,7 @@
         extScript.onload = function() {
           if (window.PRODUCTS && Array.isArray(window.PRODUCTS) && window.PRODUCTS.length > 0) {
             PRODUCTS = window.PRODUCTS;
+            if (typeof updateCategoryCounts === 'function') updateCategoryCounts();
             if (typeof renderProducts === 'function') renderProducts();
           }
         };
@@ -1361,10 +1365,41 @@
     });
 
     // Render Product Cards
+    // Dynamic Category Pill Counter
+    function updateCategoryCounts() {
+      if (typeof PRODUCTS === 'undefined' || !Array.isArray(PRODUCTS)) return;
+      const counts = {
+        all: PRODUCTS.length,
+        headstash: PRODUCTS.filter(p => p.category === 'headstash').length,
+        indoor: PRODUCTS.filter(p => p.category === 'indoor').length,
+        doinks: PRODUCTS.filter(p => p.category === 'doinks').length,
+        solventless: PRODUCTS.filter(p => p.category === 'solventless').length,
+        merch: PRODUCTS.filter(p => p.category === 'merch').length,
+      };
+      document.querySelectorAll('.cat-pill').forEach(btn => {
+        const cat = btn.getAttribute('data-cat');
+        if (!cat) return;
+        const label = btn.getAttribute('data-label') || (cat === 'all' ? 'All Drops' : (cat === 'merch' ? 'Merch & Gear' : cat.charAt(0).toUpperCase() + cat.slice(1)));
+        const count = counts[cat] !== undefined ? counts[cat] : PRODUCTS.filter(p => p.category === cat).length;
+        btn.textContent = `${label} (${count})`;
+      });
+    }
+
+    // Render Product Cards
     function renderProducts() {
+      updateCategoryCounts();
       const filtered = PRODUCTS.filter(p => activeCategory === 'all' || p.category === activeCategory);
       document.getElementById('visibleCount').textContent = filtered.length;
-      document.getElementById('activeFilterLabel').textContent = activeCategory === 'all' ? 'All Active Drops' : (activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1));
+      
+      const catLabels = {
+        all: 'All Active Drops',
+        headstash: 'Headstash Flower',
+        indoor: 'Indoor Flower',
+        doinks: 'Handcrafted Doinks',
+        solventless: 'Solventless Rosin',
+        merch: 'Merch & Gear'
+      };
+      document.getElementById('activeFilterLabel').textContent = catLabels[activeCategory] || (activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1));
 
       const grid = document.getElementById('productGrid');
       if (filtered.length === 0) {
@@ -1377,6 +1412,13 @@
       grid.innerHTML = filtered.map(p => {
         const selectedIdx = selectedVariants[p.id] || 0;
         const currentVariant = p.variants[selectedIdx] || p.variants[0];
+
+        let tierTitle = 'Select Tier / Weight:';
+        if (p.category === 'merch') {
+          tierTitle = 'Select Size / Option:';
+        } else if (p.category === 'solventless') {
+          tierTitle = 'Select Jar Size / Weight:';
+        }
 
         return `
           <div class="product-card group bg-white border border-brand-border rounded-2xl overflow-hidden shadow-luxury hover:shadow-luxury-hover hover:border-brand-black transition duration-300 flex flex-col">
@@ -1448,7 +1490,7 @@
               <!-- Tier Selection Buttons -->
               <div class="space-y-3 pt-3 border-t border-brand-border">
                 <div class="flex items-center justify-between text-xs">
-                  <span class="font-bold text-brand-subtle uppercase tracking-wider text-[11px]">Select Tier / Weight:</span>
+                  <span class="font-bold text-brand-subtle uppercase tracking-wider text-[11px]">${tierTitle}</span>
                   <div class="text-right">
                     <span class="text-xs text-brand-muted">Price:</span>
                     <strong class="text-base font-bold font-mono text-brand-black ml-1">$${currentVariant.price.toLocaleString()}</strong>
@@ -1463,7 +1505,7 @@
                       onclick="selectProductVariant('${p.id}', ${i})"
                       class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${i === selectedIdx ? 'bg-brand-black text-white shadow-sm' : 'bg-brand-canvas hover:bg-brand-hover text-brand-black border border-brand-border'}"
                     >
-                      ${v.label} · $${v.price}
+                      ${v.label} · $${v.price.toLocaleString()}
                     </button>
                   `).join('')}
                 </div>
@@ -1656,6 +1698,12 @@
     };
 
     // --- CONNOISSEUR BATCH & BURN INSPECTION MODAL ---
+    function closeInspectionModal() {
+      playSound('click');
+      document.getElementById('inspectionModal').classList.add('opacity-0', 'pointer-events-none');
+    }
+    window.closeInspectionModal = closeInspectionModal;
+
     function openInspectionModal(productId) {
       playSound('click');
       const product = PRODUCTS.find(p => p.id === productId);
@@ -1663,6 +1711,10 @@
 
       document.getElementById('inspectTitle').textContent = `${product.name} · Analysis`;
       document.getElementById('inspectImage').src = product.inspectImage || product.image;
+
+      const badgeEl = document.getElementById('inspectBadge');
+      const aromaticsTitleEl = document.getElementById('inspectAromaticsTitle');
+      const specsTitleEl = document.getElementById('inspectSpecsTitle');
 
       document.getElementById('inspectTerpenes').innerHTML = product.terpenes.map(t => `
         <div class="p-3 rounded-xl bg-brand-canvas border border-brand-border">
@@ -1672,31 +1724,73 @@
         </div>
       `).join('');
 
-      document.getElementById('inspectBurnSpecs').innerHTML = `
-        <div class="flex justify-between border-b border-brand-border pb-1.5">
-          <span class="text-brand-muted">Ash Quality:</span>
-          <span class="font-bold text-brand-black">${product.burnSpecs.ash}</span>
-        </div>
-        <div class="flex justify-between border-b border-brand-border pb-1.5">
-          <span class="text-brand-muted">Resin Halo:</span>
-          <span class="font-bold text-brand-black">${product.burnSpecs.resin}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-brand-muted">${product.burnSpecs.burnTime ? 'Draw Duration:' : 'Cure Method:'}</span>
-          <span class="font-bold text-brand-black">${product.burnSpecs.burnTime || product.burnSpecs.cure}</span>
-        </div>
-      `;
+      if (product.category === 'solventless') {
+        if (badgeEl) badgeEl.textContent = 'Macro Cold Cure & Live Melt Verification';
+        if (aromaticsTitleEl) aromaticsTitleEl.textContent = 'Terpene & Flavor Profile';
+        if (specsTitleEl) specsTitleEl.textContent = 'Melt & Dab Verification';
+
+        document.getElementById('inspectBurnSpecs').innerHTML = `
+          <div class="flex justify-between border-b border-brand-border pb-1.5">
+            <span class="text-brand-muted">Melt Quality:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.ash || 'Melts 100% clean, zero char'}</span>
+          </div>
+          <div class="flex justify-between border-b border-brand-border pb-1.5">
+            <span class="text-brand-muted">Recommended Dab Temp:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.resin || '480°F - 520°F'}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-brand-muted">Texture & Consistency:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.cure || product.burnSpecs.burnTime || 'Wet Badder'}</span>
+          </div>
+        `;
+      } else if (product.category === 'merch') {
+        if (badgeEl) badgeEl.textContent = 'Design, Silhouette & Material Inspection';
+        if (aromaticsTitleEl) aromaticsTitleEl.textContent = 'Garment & Hardware Specifications';
+        if (specsTitleEl) specsTitleEl.textContent = 'Craft & Material Specifications';
+
+        document.getElementById('inspectBurnSpecs').innerHTML = `
+          <div class="flex justify-between border-b border-brand-border pb-1.5">
+            <span class="text-brand-muted">Construction & Hem:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.ash || 'Reinforced luxury finish'}</span>
+          </div>
+          <div class="flex justify-between border-b border-brand-border pb-1.5">
+            <span class="text-brand-muted">Finish & Treatment:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.resin || 'Signature Elevé branding'}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-brand-muted">Fit & Sizing:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.cure || product.burnSpecs.burnTime || 'Custom tailored spec'}</span>
+          </div>
+        `;
+      } else {
+        // Flower & Doinks (Headstash / Indoor / Doinks)
+        if (badgeEl) badgeEl.textContent = 'Macro Trichome Head & Resin Analysis';
+        if (aromaticsTitleEl) aromaticsTitleEl.textContent = 'Terpene Profile & Aromatics';
+        if (specsTitleEl) specsTitleEl.textContent = 'Combustion & Ash Verification';
+
+        document.getElementById('inspectBurnSpecs').innerHTML = `
+          <div class="flex justify-between border-b border-brand-border pb-1.5">
+            <span class="text-brand-muted">Ash Quality:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.ash}</span>
+          </div>
+          <div class="flex justify-between border-b border-brand-border pb-1.5">
+            <span class="text-brand-muted">Resin Halo:</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.resin}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-brand-muted">${product.burnSpecs.burnTime ? 'Draw Duration:' : 'Cure Method:'}</span>
+            <span class="font-bold text-brand-black">${product.burnSpecs.burnTime || product.burnSpecs.cure}</span>
+          </div>
+        `;
+      }
 
       const modal = document.getElementById('inspectionModal');
       modal.classList.remove('opacity-0', 'pointer-events-none');
     }
     window.openInspectionModal = openInspectionModal;
 
-    document.getElementById('closeInspectionBtn').addEventListener('click', () => {
-      playSound('click');
-      document.getElementById('inspectionModal').classList.add('opacity-0', 'pointer-events-none');
-    });
-
+    document.getElementById('closeInspectionBtn').addEventListener('click', closeInspectionModal);
+    
     // --- SPLIT A PACK BUILDER LOGIC ---
     function openSplitPackModal() {
       playSound('click');
@@ -1838,6 +1932,13 @@
 
     window.resetCategory = function() {
       activeCategory = 'all';
+      document.querySelectorAll('.cat-pill').forEach(p => {
+        if (p.getAttribute('data-cat') === 'all') {
+          p.className = 'cat-pill active px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-brand-black text-white';
+        } else {
+          p.className = 'cat-pill px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition bg-white hover:bg-brand-hover text-brand-subtle hover:text-brand-black border border-brand-border';
+        }
+      });
       renderProducts();
     };
 
