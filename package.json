@@ -1,0 +1,47 @@
+{
+  "name": "eleve-select",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:setup": "npm run db:migrate && npm run db:seed",
+    "test": "tsx --test src/server/orders.test.ts"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "latest",
+    "@neondatabase/serverless": "latest",
+    "drizzle-orm": "latest",
+    "next": "latest",
+    "pg": "latest",
+    "qrcode": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "ws": "latest"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "latest",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "@types/qrcode": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/ws": "latest",
+    "dotenv": "latest",
+    "drizzle-kit": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "tailwindcss": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
