@@ -50,6 +50,10 @@ async function main() {
   const productBySlug = new Map<string, { id: string; kind: string }>();
   for (const product of productSeeds) {
     await db.insert(products).values(product).onConflictDoNothing({ target: products.slug });
+    await db
+      .update(products)
+      .set({ name: product.name, subtitle: product.subtitle, description: product.description })
+      .where(eq(products.slug, product.slug));
     const [row] = await db.select().from(products).where(eq(products.slug, product.slug)).limit(1);
     if (!row) throw new Error(`Product ${product.slug} was not seeded.`);
     productBySlug.set(product.slug, { id: row.id, kind: row.kind });

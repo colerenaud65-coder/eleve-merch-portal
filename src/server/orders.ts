@@ -243,7 +243,7 @@ async function completePreorder(
       productId: box.id,
       quantity: boxQty,
       unitAmountCents: boxPrice.amountCents,
-      label: numbers.map((number) => editionLabel(number)).join(" · "),
+      label: `4-Strain Box · ${numbers.map((number) => editionLabel(number)).join(" · ")}`,
       strainPosition: null,
     });
   }
@@ -253,7 +253,7 @@ async function completePreorder(
       productId: jar.id,
       quantity: line.quantity,
       unitAmountCents: jarPrice!.amountCents,
-      label: `7 g · ${strain?.name ?? "Jar"}`,
+      label: `7 g jar · ${strain?.name ?? "Jar"}`,
       strainPosition: line.strainPosition ?? null,
     });
   }

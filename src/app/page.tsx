@@ -18,8 +18,8 @@ export default async function HomePage() {
           <p className="text-[11px] uppercase tracking-[0.42em]">Select</p>
           <h1 className="mt-3 font-serif text-[22vw] leading-[0.78] sm:text-[9.5rem]">Élevé</h1>
           <p className="mt-6 max-w-md text-sm leading-relaxed text-mute">
-            Sixteen numbered boxes and standalone 7 g jars. Released at a pop-up, not shipped from a
-            cart. Cole opens the menu after you ask.
+            A 4-strain box, 7 g of each strain, and 7 g jars of those same strains. Released at a
+            pop-up, not shipped from a cart. Cole opens the menu after you ask.
           </p>
         </div>
         <ol className="grid gap-px border border-ink bg-ink sm:grid-cols-3">

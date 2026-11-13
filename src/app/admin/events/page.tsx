@@ -38,23 +38,33 @@ export default async function AdminEventsPage() {
                   </button>
                 </div>
               </form>
-              <form action={saveDrop} className="mt-6 grid gap-3">
+              <form action={saveDrop} className="mt-6 grid gap-6">
                 <input type="hidden" name="eventId" value={event.id} />
-                <p className="text-[11px] uppercase tracking-[0.16em]">One lineup for every box</p>
-                <label>
-                  Boxes in this drop
-                  <input name="boxOnHand" type="number" min={event.boxReserved} max={16} defaultValue={event.boxOnHand} />
-                </label>
-                {[1, 2, 3, 4].map((position) => {
-                  const strain = strainRows.find((row) => row.eventId === event.id && row.position === position);
-                  return (
-                    <div key={position} className="grid gap-3 sm:grid-cols-[1fr_8rem]">
-                      <label>
+                <fieldset className="grid gap-3">
+                  <legend className="text-[11px] uppercase tracking-[0.16em]">4-Strain Box</legend>
+                  <p className="text-sm text-mute">7 g of each strain, 28 g total.</p>
+                  <label>
+                    Box quantity
+                    <input name="boxOnHand" type="number" min={event.boxReserved} max={16} defaultValue={event.boxOnHand} />
+                  </label>
+                  {[1, 2, 3, 4].map((position) => {
+                    const strain = strainRows.find((row) => row.eventId === event.id && row.position === position);
+                    return (
+                      <label key={position}>
                         Strain {position}
                         <input name={`strain:${position}`} defaultValue={strain?.name ?? ""} />
                       </label>
-                      <label>
-                        Jar stock
+                    );
+                  })}
+                </fieldset>
+                <fieldset className="grid gap-3">
+                  <legend className="text-[11px] uppercase tracking-[0.16em]">7 g jar</legend>
+                  <p className="text-sm text-mute">Strains are copied from this drop’s box. Set quantity only.</p>
+                  {[1, 2, 3, 4].map((position) => {
+                    const strain = strainRows.find((row) => row.eventId === event.id && row.position === position);
+                    return (
+                      <label key={position}>
+                        {strain?.name.trim() || `Strain ${position}`}
                         <input
                           name={`jars:${position}`}
                           type="number"
@@ -62,9 +72,9 @@ export default async function AdminEventsPage() {
                           defaultValue={strain?.jarOnHand ?? 0}
                         />
                       </label>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </fieldset>
                 <label className="flex items-center gap-2 normal-case tracking-normal">
                   <input type="checkbox" name="cancelled" value="yes" defaultChecked={event.cancelled} />
                   Cancel this week

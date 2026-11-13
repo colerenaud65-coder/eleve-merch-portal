@@ -85,17 +85,21 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
       {canSeeMenu && offer ? (
         <>
-          <p className="mt-10 max-w-xl text-sm text-mute">{SELECTION_SPEC}</p>
-          <p className="mt-6 text-sm">
-            {offer.boxesAvailable} of {offer.boxOnHand} boxes left · {formatMoney(offer.boxCents, row.region.currency)} each.
+          <h2 className="mt-10 text-[11px] uppercase tracking-[0.16em]">4-Strain Box</h2>
+          <p className="mt-3 max-w-xl text-sm text-mute">{SELECTION_SPEC}</p>
+          <p className="mt-3 text-sm">
+            {offer.boxesAvailable} of {offer.boxOnHand} left · {formatMoney(offer.boxCents, row.region.currency)} each.
             Numbers are assigned in order, 01/16 through 16/16.
           </p>
-          <ul className="mt-6 divide-y divide-ink border-y border-ink">
+          <p className="mt-3 text-sm">{named.map((strain) => strain.name).join(" · ") || "Lineup not posted"}</p>
+          <h2 className="mt-8 text-[11px] uppercase tracking-[0.16em]">7 g jar</h2>
+          <p className="mt-3 max-w-xl text-sm text-mute">{JAR_SPEC} Same four strains as the box.</p>
+          <ul className="mt-3 divide-y divide-ink border-y border-ink">
             {offer.strains.map((strain) => (
               <li key={strain.id} className="flex flex-wrap items-baseline justify-between gap-3 py-3 text-sm">
                 <span>{strain.name.trim() || `Strain ${strain.position}`}</span>
                 <span className="text-mute">
-                  {JAR_SPEC} · {formatMoney(offer.jarCents, row.region.currency)} · {strain.jarOnHand - strain.jarReserved} left
+                  {formatMoney(offer.jarCents, row.region.currency)} · {strain.jarOnHand - strain.jarReserved} left
                 </span>
               </li>
             ))}

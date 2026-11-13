@@ -101,7 +101,7 @@ export const TORONTO_DROP = {
   name: "Sunday Service",
   venue: "Sunday Service by Caked, 1196 Queen St W",
   city: "Toronto",
-  summary: "Every Sunday, 12:00–6:00 PM ET. Every numbered box in the drop carries the same four strains. Jars are those strains, sold one by one.",
+  summary: "Every Sunday, 12:00–6:00 PM ET. The 4-strain box is 7 g of each strain. Jars are those same strains.",
 };
 
 export const VANCOUVER_DROP = {
@@ -113,7 +113,7 @@ export const VANCOUVER_DROP = {
 export const wholesaleRegions = regionSeeds.filter((region) => region.channel === "wholesale");
 
 export const SELECTION_SPEC =
-  "8×8×3 pine wood gift box. Black foam insert. Matte white strain wrap label. Tamper seal. Hand-numbered tasting card.";
+  "7 g of each of four strains, 28 g total. 8×8×3 pine wood gift box. Black foam insert. Matte white strain wrap label. Tamper seal. Hand-numbered tasting card.";
 
 export const JAR_SPEC = "4 oz straight-sided amber glass. Black metal lid. 7 g.";
 
@@ -132,11 +132,11 @@ export type ProductSeed = {
 export const productSeeds: ProductSeed[] = [
   {
     slug: "selection-box",
-    name: "Selection box",
+    name: "4-Strain Box",
     kind: "selection",
     editionNumber: null,
     editionSize: EDITION_SIZE,
-    subtitle: "Numbered box",
+    subtitle: "7 g × 4",
     description: SELECTION_SPEC,
     imagePath: null,
     sortOrder: 1,
@@ -147,7 +147,7 @@ export const productSeeds: ProductSeed[] = [
     kind: "jar",
     editionNumber: null,
     editionSize: null,
-    subtitle: "Standalone jar",
+    subtitle: "Same four strains as the box",
     description: JAR_SPEC,
     imagePath: null,
     sortOrder: 100,

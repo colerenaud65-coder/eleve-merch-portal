@@ -37,20 +37,25 @@ export function PreorderForm({
   return (
     <form action={action} className="space-y-8">
       <input type="hidden" name="event" value={eventSlug} />
-      <label>
-        Boxes · {formatMoney(boxCents, currency)} · {boxesAvailable} left
-        <input
-          name="boxes"
-          type="number"
-          min={0}
-          max={boxesAvailable}
-          value={boxes}
-          onChange={(event) => setBoxes(Number(event.target.value))}
-        />
-      </label>
-      <p className="text-sm text-mute">
-        Every box in this drop carries the same four strains. The next open numbers are assigned when you order.
-      </p>
+      <fieldset className="space-y-3">
+        <legend className="text-[11px] uppercase tracking-[0.2em]">4-Strain Box</legend>
+        <label>
+          Quantity · {formatMoney(boxCents, currency)} · {boxesAvailable} left
+          <input
+            name="boxes"
+            type="number"
+            min={0}
+            max={boxesAvailable}
+            value={boxes}
+            onChange={(event) => setBoxes(Number(event.target.value))}
+          />
+        </label>
+        <p className="text-sm text-mute">
+          7 g of each strain, 28 g total. {strains.map((strain) => strain.name).join(" · ")}. Numbers are assigned in order.
+        </p>
+      </fieldset>
+      <fieldset className="space-y-3">
+        <legend className="text-[11px] uppercase tracking-[0.2em]">7 g jar</legend>
       <div className="divide-y divide-ink border border-ink">
         {strains.map((strain) => (
           <div key={strain.position} className="grid gap-3 p-4 sm:grid-cols-[1fr_7rem] sm:items-center">
@@ -76,6 +81,7 @@ export function PreorderForm({
           </div>
         ))}
       </div>
+      </fieldset>
       <label>
         Note for pickup
         <textarea name="notes" maxLength={500} placeholder="Optional" />
