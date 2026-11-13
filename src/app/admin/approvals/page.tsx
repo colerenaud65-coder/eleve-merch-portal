@@ -3,6 +3,7 @@ import {
   createInvite,
   decideApplication,
   reviewRequest,
+  setPaymentTerms,
   suspendAccount,
 } from "@/server/actions";
 import {
@@ -10,18 +11,20 @@ import {
   listApplications,
   listInvitations,
   listPendingAccounts,
+  listWholesaleBuyers,
   listWholesaleRegions,
 } from "@/server/queries";
 
 export const metadata = { title: "Approvals" };
 
 export default async function ApprovalsPage() {
-  const [pending, requests, applications, invites, regions] = await Promise.all([
+  const [pending, requests, applications, invites, regions, buyers] = await Promise.all([
     listPendingAccounts(),
     listAccessRequests(),
     listApplications(),
     listInvitations(),
     listWholesaleRegions(),
+    listWholesaleBuyers(),
   ]);
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
@@ -117,6 +120,30 @@ export default async function ApprovalsPage() {
                 </form>
               ) : null}
             </article>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-[11px] uppercase tracking-[0.2em]">Wholesale terms</h2>
+        <div className="mt-4 space-y-3">
+          {buyers.map(({ account, region }) => (
+            <form key={account.id} action={setPaymentTerms} className="grid gap-3 border border-ink p-4 sm:grid-cols-[1fr_12rem_auto] sm:items-end">
+              <div>
+                <p>{account.name}</p>
+                <p className="text-sm text-mute">{region?.name ?? "No region"}</p>
+              </div>
+              <input type="hidden" name="accountId" value={account.id} />
+              <label>
+                Terms
+                <select name="terms" defaultValue={account.paymentTerms}>
+                  <option value="deposit">Deposit</option>
+                  <option value="net_15">Net 15</option>
+                  <option value="net_30">Net 30</option>
+                </select>
+              </label>
+              <button type="submit">Save</button>
+            </form>
           ))}
         </div>
       </section>

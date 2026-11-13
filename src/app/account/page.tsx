@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { SignOut } from "@/components/sign-out";
-import { roleLabel, orderStatusLabel } from "@/lib/labels";
+import { roleLabel, orderStatusLabel, termsLabel } from "@/lib/labels";
 import { clerkConfigured, getCurrentAccount } from "@/server/auth";
 import { formatMoney } from "@/server/money";
 import { accountApplication, listOrdersForAccount } from "@/server/queries";
@@ -21,6 +21,7 @@ export default async function AccountPage() {
       <h1 className="mt-2 font-serif text-6xl leading-none">{account.name}</h1>
       <p className="mt-4 text-sm">
         {roleLabel[account.role]} · {account.status}
+        {account.role === "wholesale_buyer" ? ` · ${termsLabel[account.paymentTerms] ?? account.paymentTerms}` : ""}
       </p>
 
       {account.status === "pending" ? (
@@ -70,6 +71,11 @@ export default async function AccountPage() {
                   {orderStatusLabel[order.status]} · {region.name}
                   {event ? ` · ${event.name}` : ""}
                 </p>
+                {order.kind === "wholesale" ? (
+                  <Link href={`/wholesale/order?reorder=${order.id}`} className="text-[11px] uppercase tracking-[0.14em]">
+                    Reorder
+                  </Link>
+                ) : null}
               </div>
               <span className="text-sm">
                   {formatMoney(order.subtotalCents - order.depositReceivedCents, order.currency)} outstanding

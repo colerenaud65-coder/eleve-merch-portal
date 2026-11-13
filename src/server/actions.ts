@@ -15,13 +15,15 @@ import {
   inventory,
   invitations,
   regions,
+  selectionLineups,
+  waitlistEntries,
   wholesaleApplications,
 } from "@/db/schema";
 import { clearDevSession, devPreviewEnabled, getCurrentAccount, setDevSession } from "@/server/auth";
 import { clearGate, readGate, writeGate } from "@/server/gate";
 import { dollarsToCents } from "@/server/money";
 import { OrderError, cancelOrder, completeOrder, markReady, placeOrder, recordDeposit } from "@/server/orders";
-import { getEventBySlug } from "@/server/queries";
+import { getEventBySlug, getOrderByPickupToken } from "@/server/queries";
 import { ageInZone } from "@/server/time";
 
 function failure(error: unknown) {
@@ -443,6 +445,81 @@ export async function adminOrderStatus(formData: FormData) {
   }
   revalidatePath("/admin/orders");
   revalidatePath(`/orders/${orderId}`);
+}
+
+export async function joinWaitlist(formData: FormData) {
+  const account = await requireAccount();
+  if (account.status !== "approved") return;
+  const slug = String(formData.get("event") ?? "");
+  const row = await getEventBySlug(slug);
+  const gate = await readGate();
+  if (!row || gate?.regionSlug !== row.region.slug) return;
+  await getDb()
+    .insert(waitlistEntries)
+    .values({ eventId: row.event.id, accountId: account.id })
+    .onConflictDoNothing();
+  revalidatePath(`/events/${slug}`);
+}
+
+export async function saveLineups(formData: FormData) {
+  await requireAdmin();
+  const eventId = String(formData.get("eventId") ?? "");
+  const db = getDb();
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("lineup:")) continue;
+    const lineup = String(value).trim();
+    await db
+      .insert(selectionLineups)
+      .values({ eventId, productId: key.slice("lineup:".length), lineup })
+      .onConflictDoUpdate({
+        target: [selectionLineups.eventId, selectionLineups.productId],
+        set: { lineup },
+      });
+  }
+  revalidatePath("/admin/events");
+  revalidatePath("/events");
+}
+
+export async function setPaymentTerms(formData: FormData) {
+  await requireAdmin();
+  const accountId = String(formData.get("accountId") ?? "");
+  const terms = String(formData.get("terms") ?? "");
+  if (terms !== "deposit" && terms !== "net_15" && terms !== "net_30") return;
+  await getDb().update(accounts).set({ paymentTerms: terms }).where(eq(accounts.id, accountId));
+  revalidatePath("/admin/approvals");
+  revalidatePath("/wholesale/order");
+}
+
+export async function checkInPickup(formData: FormData) {
+  const admin = await requireAdmin();
+  const raw = String(formData.get("token") ?? "").trim();
+  const token = decodeURIComponent(raw.includes("/pickup/") ? (raw.split("/pickup/").pop() ?? "") : raw).split(/[?#]/)[0];
+  if (!token) redirect("/admin/pickup?missing=1");
+  const detail = await getOrderByPickupToken(token);
+  if (!detail || detail.order.status === "cancelled") redirect("/admin/pickup?missing=1");
+  if (detail.order.status !== "completed") {
+    if (detail.order.balanceCents > 0) {
+      await recordDeposit({
+        orderId: detail.order.id,
+        amountCents: detail.order.balanceCents,
+        note: "Collected at pickup",
+        recordedBy: admin.id,
+      });
+    }
+    try {
+      await markReady(detail.order.id);
+    } catch {
+      // Already ready, or the deposit just moved it forward.
+    }
+    try {
+      await completeOrder(detail.order.id);
+    } catch {
+      // Already checked in.
+    }
+  }
+  revalidatePath("/admin/orders");
+  revalidatePath(`/orders/${detail.order.id}`);
+  redirect(`/admin/pickup?token=${encodeURIComponent(token)}`);
 }
 
 function zonedToUtc(local: string, timeZone: string) {

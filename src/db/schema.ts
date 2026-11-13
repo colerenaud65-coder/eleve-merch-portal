@@ -41,6 +41,7 @@ export const orderStatus = pgEnum("order_status", [
   "ready_for_pickup",
   "completed",
   "cancelled",
+  "on_terms",
 ]);
 
 export const applicationStatus = pgEnum("application_status", [
@@ -70,6 +71,7 @@ export const accounts = pgTable("accounts", {
   role: accountRole("role").notNull().default("popup_customer"),
   status: accountStatus("status").notNull().default("pending"),
   regionId: uuid("region_id").references(() => regions.id),
+  paymentTerms: text("payment_terms").notNull().default("deposit"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -155,6 +157,36 @@ export const products = pgTable("products", {
   active: boolean("active").notNull().default(true),
 });
 
+export const selectionLineups = pgTable(
+  "selection_lineups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    lineup: text("lineup").notNull().default(""),
+  },
+  (table) => [unique("selection_lineups_event_product").on(table.eventId, table.productId)],
+);
+
+export const waitlistEntries = pgTable(
+  "waitlist_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("waitlist_event_account").on(table.eventId, table.accountId)],
+);
+
 export const prices = pgTable(
   "prices",
   {
@@ -208,6 +240,10 @@ export const orders = pgTable("orders", {
   balanceCents: integer("balance_cents").notNull(),
   transferReference: text("transfer_reference").notNull().unique(),
   pickupToken: text("pickup_token").notNull().unique(),
+  paymentTerms: text("payment_terms").notNull().default("deposit"),
+  holdExpiresAt: timestamp("hold_expires_at", { withTimezone: true }),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

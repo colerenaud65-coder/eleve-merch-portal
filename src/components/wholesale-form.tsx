@@ -23,14 +23,20 @@ export function WholesaleForm({
   currency,
   setItem,
   jars,
+  initialSets = 0,
+  initialJars = {},
+  terms = "deposit",
 }: {
   currency: string;
   setItem: SetItem | null;
   jars: JarItem[];
+  initialSets?: number;
+  initialJars?: Record<string, number>;
+  terms?: string;
 }) {
   const [state, action, pending] = useActionState(placeWholesale, null);
-  const [sets, setSets] = useState(0);
-  const [jarQty, setJarQty] = useState<Record<string, number>>({});
+  const [sets, setSets] = useState(initialSets);
+  const [jarQty, setJarQty] = useState<Record<string, number>>(initialJars);
   const total = useMemo(() => {
     const setTotal = (setItem?.amountCents ?? 0) * sets;
     const jarTotal = jars.reduce((sum, jar) => sum + (jarQty[jar.id] ?? 0) * jar.amountCents, 0);
@@ -83,7 +89,12 @@ export function WholesaleForm({
         <textarea name="notes" maxLength={500} />
       </label>
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <p className="font-serif text-4xl">{formatMoney(total, currency)}</p>
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-mute">
+            {terms === "deposit" ? "Deposit" : terms === "net_15" ? "Net 15" : terms === "net_30" ? "Net 30" : terms}
+          </p>
+          <p className="font-serif text-4xl">{formatMoney(total, currency)}</p>
+        </div>
         <button type="submit" disabled={pending || total <= 0}>
           {pending ? "Sending" : "Place wholesale order"}
         </button>

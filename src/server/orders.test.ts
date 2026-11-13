@@ -7,8 +7,8 @@ import { eq } from "drizzle-orm";
 config({ path: ".env.local" });
 
 import { getDb } from "../db/index";
-import { accounts, events, inventory, products, regions } from "../db/schema";
-import { OrderError, cancelOrder, placeOrder, recordDeposit } from "./orders";
+import { accounts, events, inventory, orders, products, regions, waitlistEntries } from "../db/schema";
+import { OrderError, cancelOrder, placeOrder, recordDeposit, releaseExpiredHolds } from "./orders";
 
 async function accountByEmail(email: string) {
   const [account] = await getDb().select().from(accounts).where(eq(accounts.email, email)).limit(1);
@@ -42,8 +42,8 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   const pending = await accountByEmail("pending@eleve.select");
   const applicant = await accountByEmail("applicant@eleve.select");
   const buyer = await accountByEmail("buyer@eleve.select");
-  const box = await productBySlug("original-z");
-  const jar = await productBySlug("jar-original-z");
+  const box = await productBySlug("selection-01");
+  const jar = await productBySlug("jar-7g");
   const set = await productBySlug("selection-of-16");
   const kingWest = await eventBySlug("toronto-king-west");
   const railtown = await eventBySlug("vancouver-railtown");
@@ -209,4 +209,51 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
     await getDb().select().from(inventory).where(eq(inventory.regionId, horseshoe.id))
   ).filter((row) => row.productId === box.id);
   assert.equal(released.reserved, 0);
+
+  const held = await placeOrder({
+    accountId: collector.id,
+    kind: "preorder",
+    eventId: kingWest.id,
+    lines: [{ productId: box.id, quantity: 1, regionId: toronto.id }],
+  });
+  await getDb()
+    .update(orders)
+    .set({ holdExpiresAt: new Date(Date.now() - 60_000) })
+    .where(eq(orders.id, held.id));
+  assert.equal(await releaseExpiredHolds(), 1);
+  const [expired] = await getDb().select().from(orders).where(eq(orders.id, held.id));
+  assert.equal(expired?.status, "cancelled");
+  const reopened = await placeOrder({
+    accountId: collector.id,
+    kind: "preorder",
+    eventId: kingWest.id,
+    lines: [{ productId: box.id, quantity: 1, regionId: toronto.id }],
+  });
+  assert.equal(reopened.status, "awaiting_deposit");
+  await cancelOrder(reopened.id);
+
+  await getDb().update(accounts).set({ paymentTerms: "net_15" }).where(eq(accounts.id, buyer.id));
+  const termed = await placeOrder({
+    accountId: buyer.id,
+    kind: "wholesale",
+    lines: [{ productId: jar.id, quantity: 2, regionId: horseshoe.id }],
+  });
+  assert.equal(termed.status, "on_terms");
+  assert.equal(termed.depositRequiredCents, 0);
+  assert.equal(termed.subtotalCents, 8000);
+  assert.equal(termed.holdExpiresAt, null);
+  assert.ok(termed.dueAt && termed.dueAt.getTime() > Date.now());
+  await cancelOrder(termed.id);
+  await getDb().update(accounts).set({ paymentTerms: "deposit" }).where(eq(accounts.id, buyer.id));
+
+  await getDb().insert(waitlistEntries).values({ eventId: kingWest.id, accountId: collector.id });
+  await getDb()
+    .insert(waitlistEntries)
+    .values({ eventId: kingWest.id, accountId: collector.id })
+    .onConflictDoNothing();
+  const waiting = await getDb()
+    .select()
+    .from(waitlistEntries)
+    .where(eq(waitlistEntries.eventId, kingWest.id));
+  assert.equal(waiting.length, 1);
 });

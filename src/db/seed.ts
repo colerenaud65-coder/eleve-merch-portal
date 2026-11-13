@@ -2,7 +2,7 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-import { eq } from "drizzle-orm";
+import { eq, inArray, notInArray } from "drizzle-orm";
 
 import {
   EDITION_SIZE,
@@ -30,6 +30,7 @@ import {
   prices,
   products,
   regions,
+  selectionLineups,
   wholesaleApplications,
 } from "./schema";
 
@@ -159,6 +160,20 @@ async function main() {
     await db.delete(deposits);
     await db.delete(orderLines);
     await db.delete(orders);
+  }
+
+  const keep = productSeeds.map((product) => product.slug);
+  const stale = await db.select({ id: products.id }).from(products).where(notInArray(products.slug, keep));
+  if (stale.length > 0) {
+    const ids = stale.map((row) => row.id);
+    if (allowReset) {
+      await db.delete(selectionLineups).where(inArray(selectionLineups.productId, ids));
+      await db.delete(inventory).where(inArray(inventory.productId, ids));
+      await db.delete(prices).where(inArray(prices.productId, ids));
+      await db.delete(products).where(inArray(products.id, ids));
+    } else {
+      await db.update(products).set({ active: false, imagePath: null }).where(inArray(products.id, ids));
+    }
   }
 
   for (const product of productSeeds) {

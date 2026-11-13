@@ -29,6 +29,14 @@ export const metadata: Metadata = {
     template: "%s · Élevé Select",
   },
   description: "Numbered collector boxes and 7 g jars, released at pop-ups. Access is personal.",
+  icons: {
+    icon: [
+      { url: "/brand/favicon.ico", sizes: "any" },
+      { url: "/brand/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/brand/icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: "/brand/apple-touch-icon.png",
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

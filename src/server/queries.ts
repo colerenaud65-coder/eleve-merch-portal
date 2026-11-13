@@ -13,8 +13,11 @@ import {
   prices,
   products,
   regions,
+  selectionLineups,
+  waitlistEntries,
   wholesaleApplications,
 } from "@/db/schema";
+import { releaseExpiredHolds } from "@/server/orders";
 
 export async function getRegionBySlug(slug: string) {
   const [region] = await getDb().select().from(regions).where(eq(regions.slug, slug)).limit(1);
@@ -50,11 +53,13 @@ export type MenuItem = {
   subtitle: string;
   description: string;
   imagePath: string | null;
+  lineup: string;
   amountCents: number;
   available: number;
 };
 
-export async function retailMenu(regionId: string): Promise<MenuItem[]> {
+export async function retailMenu(regionId: string, eventId?: string): Promise<MenuItem[]> {
+  await releaseExpiredHolds();
   const rows = await getDb()
     .select({
       id: products.id,
@@ -65,6 +70,7 @@ export async function retailMenu(regionId: string): Promise<MenuItem[]> {
       subtitle: products.subtitle,
       description: products.description,
       imagePath: products.imagePath,
+      lineup: selectionLineups.lineup,
       amountCents: prices.amountCents,
       onHand: inventory.onHand,
       reserved: inventory.reserved,
@@ -83,6 +89,13 @@ export async function retailMenu(regionId: string): Promise<MenuItem[]> {
       inventory,
       and(eq(inventory.productId, products.id), eq(inventory.regionId, regionId)),
     )
+    .leftJoin(
+      selectionLineups,
+      and(
+        eq(selectionLineups.productId, products.id),
+        eventId ? eq(selectionLineups.eventId, eventId) : sql`false`,
+      ),
+    )
     .where(eq(products.active, true))
     .orderBy(asc(products.sortOrder));
 
@@ -97,6 +110,7 @@ export async function retailMenu(regionId: string): Promise<MenuItem[]> {
       subtitle: row.subtitle,
       description: row.description,
       imagePath: row.imagePath,
+      lineup: row.lineup ?? "",
       amountCents: row.amountCents,
       available: row.onHand - row.reserved,
     }));
@@ -303,8 +317,7 @@ export async function listRetailRegions() {
 }
 
 export async function listInventory(regionId?: string) {
-  const db = getDb();
-  const query = db
+  return getDb()
     .select({
       inventory,
       product: products,
@@ -313,19 +326,56 @@ export async function listInventory(regionId?: string) {
     .from(inventory)
     .innerJoin(products, eq(products.id, inventory.productId))
     .innerJoin(regions, eq(regions.id, inventory.regionId))
+    .where(
+      regionId
+        ? and(eq(products.active, true), eq(inventory.regionId, regionId))
+        : eq(products.active, true),
+    )
     .orderBy(asc(regions.sortOrder), asc(products.sortOrder));
-  if (!regionId) return query;
-  return query.where(eq(inventory.regionId, regionId));
 }
 
-export async function listAllOrders() {
-  return getDb()
+export async function listAllOrders(eventId?: string) {
+  await releaseExpiredHolds();
+  const query = getDb()
     .select({ order: orders, region: regions, account: accounts, event: events })
     .from(orders)
     .innerJoin(regions, eq(regions.id, orders.regionId))
     .innerJoin(accounts, eq(accounts.id, orders.accountId))
     .leftJoin(events, eq(events.id, orders.eventId))
     .orderBy(desc(orders.createdAt));
+  if (!eventId) return query;
+  return query.where(eq(orders.eventId, eventId));
+}
+
+export async function listLineups(eventId: string) {
+  return getDb().select().from(selectionLineups).where(eq(selectionLineups.eventId, eventId));
+}
+
+export async function waitlistForEvent(eventId: string) {
+  return getDb()
+    .select({ entry: waitlistEntries, account: accounts })
+    .from(waitlistEntries)
+    .innerJoin(accounts, eq(accounts.id, waitlistEntries.accountId))
+    .where(eq(waitlistEntries.eventId, eventId))
+    .orderBy(asc(waitlistEntries.createdAt));
+}
+
+export async function accountOnWaitlist(accountId: string, eventId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(waitlistEntries)
+    .where(and(eq(waitlistEntries.accountId, accountId), eq(waitlistEntries.eventId, eventId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function listWholesaleBuyers() {
+  return getDb()
+    .select({ account: accounts, region: regions })
+    .from(accounts)
+    .leftJoin(regions, eq(regions.id, accounts.regionId))
+    .where(eq(accounts.role, "wholesale_buyer"))
+    .orderBy(asc(accounts.email));
 }
 
 export async function listDevAccounts() {

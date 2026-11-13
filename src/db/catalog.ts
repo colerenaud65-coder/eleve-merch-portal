@@ -97,59 +97,10 @@ export const regionSeeds: RegionSeed[] = [
 export const retailRegions = regionSeeds.filter((region) => region.channel === "retail");
 export const wholesaleRegions = regionSeeds.filter((region) => region.channel === "wholesale");
 
-type NamedCut = {
-  slug: string;
-  name: string;
-  subtitle: string;
-  description: string;
-  imagePath: string;
-};
+export const SELECTION_SPEC =
+  "8×8×3 pine wood gift box. Black foam insert. Matte white strain wrap label. Tamper seal. Hand-numbered tasting card.";
 
-const namedCuts: NamedCut[] = [
-  {
-    slug: "original-z",
-    name: "Original Z",
-    subtitle: "Lineage unknown",
-    description:
-      "Sweet candy and tropical fruit. Cold-cured in glass, with a heavy resin ring.",
-    imagePath: "/media/originalZNug.webp",
-  },
-  {
-    slug: "zunzet",
-    name: "ZunZet",
-    subtitle: "Blue Zushi × Sherb Bx",
-    description: "Living soil, grown in house. Meyer lemon, cracked pepper, lavender gas.",
-    imagePath: "/media/zunzetNug.jpg",
-  },
-  {
-    slug: "gas-station-og",
-    name: "Gas Station OG",
-    subtitle: "OG Kush",
-    description: "Gassy funk and a clean, even burn. Issued as a numbered box and a 7 g jar.",
-    imagePath: "/media/gasStationOGNug.webp",
-  },
-  {
-    slug: "pi-chew-1",
-    name: "Pi-Chew No. 1",
-    subtitle: "Z-Pie #14 × Zuyaqui",
-    description: "Fruit-chew sweetness, citrus zest, a candy finish on the exhale.",
-    imagePath: "/media/piChewNug.webp",
-  },
-  {
-    slug: "toad-venom",
-    name: "Toad Venom",
-    subtitle: "Animal Face × Sin Mintz",
-    description: "Grown in British Columbia. Spicy diesel, herbal funk, woody pine.",
-    imagePath: "/media/toadVenomNug.jpg",
-  },
-  {
-    slug: "peaches",
-    name: "Peaches",
-    subtitle: "Zkittlez × Papaya",
-    description: "Small-batch stone fruit from the archive, returned as a numbered box.",
-    imagePath: "/media/originalZNug.webp",
-  },
-];
+export const JAR_SPEC = "4 oz straight-sided amber glass. Black metal lid. 7 g.";
 
 export type ProductSeed = {
   slug: string;
@@ -163,63 +114,37 @@ export type ProductSeed = {
   sortOrder: number;
 };
 
-const houseImages = [
-  "/media/gasStationOGNug.webp",
-  "/media/piChewNug.webp",
-  "/media/toadVenomNug.jpg",
-  "/media/zunzetNug.jpg",
-  "/media/originalZNug.webp",
-];
-
 function selectionProducts(): ProductSeed[] {
-  const named = namedCuts.map((cut, index) => ({
-    slug: cut.slug,
-    name: cut.name,
-    kind: "selection" as const,
-    editionNumber: index + 1,
-    editionSize: EDITION_SIZE,
-    subtitle: cut.subtitle,
-    description: cut.description,
-    imagePath: cut.imagePath,
-    sortOrder: index + 1,
-  }));
-
-  const rest: ProductSeed[] = [];
-  for (let number = namedCuts.length + 1; number <= EDITION_SIZE; number += 1) {
-    rest.push({
-      slug: `edition-${String(number).padStart(2, "0")}`,
-      name: "House selection",
-      kind: "selection",
+  return Array.from({ length: EDITION_SIZE }, (_, index) => {
+    const number = index + 1;
+    const label = String(number).padStart(2, "0");
+    return {
+      slug: `selection-${label}`,
+      name: `Selection ${label}`,
+      kind: "selection" as const,
       editionNumber: number,
       editionSize: EDITION_SIZE,
       subtitle: "Numbered box",
-      description:
-        "One of sixteen. The card inside the box names the cut packed for this drop.",
-      imagePath: houseImages[(number - 1) % houseImages.length] ?? null,
+      description: SELECTION_SPEC,
+      imagePath: null,
       sortOrder: number,
-    });
-  }
-
-  return [...named, ...rest];
-}
-
-function jarProducts(): ProductSeed[] {
-  return namedCuts.slice(0, 5).map((cut, index) => ({
-    slug: `jar-${cut.slug}`,
-    name: `${cut.name} 7 g`,
-    kind: "jar" as const,
-    editionNumber: null,
-    editionSize: null,
-    subtitle: "Standalone jar",
-    description: cut.description,
-    imagePath: cut.slug === "zunzet" ? "/media/zunzetJar.jpg" : cut.imagePath,
-    sortOrder: 100 + index,
-  }));
+    };
+  });
 }
 
 export const productSeeds: ProductSeed[] = [
   ...selectionProducts(),
-  ...jarProducts(),
+  {
+    slug: "jar-7g",
+    name: "7 g jar",
+    kind: "jar",
+    editionNumber: null,
+    editionSize: null,
+    subtitle: "Standalone jar",
+    description: JAR_SPEC,
+    imagePath: null,
+    sortOrder: 100,
+  },
   {
     slug: "selection-of-16",
     name: "Selection of 16",
@@ -227,9 +152,8 @@ export const productSeeds: ProductSeed[] = [
     editionNumber: null,
     editionSize: EDITION_SIZE,
     subtitle: "Wholesale set",
-    description:
-      "All sixteen numbered boxes, allocated together and priced as one Ontario wholesale selection.",
-    imagePath: "/media/zunzetJar.jpg",
+    description: `All sixteen numbered boxes. ${SELECTION_SPEC}`,
+    imagePath: null,
     sortOrder: 200,
   },
 ];

@@ -11,6 +11,8 @@ export type PreorderItem = {
   kind: "selection" | "jar";
   editionNumber: number | null;
   subtitle: string;
+  lineup: string;
+  description: string;
   amountCents: number;
   available: number;
   imagePath: string | null;
@@ -58,9 +60,8 @@ export function PreorderForm({
                 className={`border border-ink p-3 normal-case tracking-normal ${disabled ? "opacity-40" : ""}`}
               >
                 <span className="font-sans text-sm tracking-[0.18em]">{label}</span>
-                <span className="mt-3 block text-sm">{item.name}</span>
-                <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-mute">
-                  {item.subtitle}
+                <span className="mt-3 block text-sm normal-case tracking-normal">
+                  {item.lineup || "Lineup not posted"}
                 </span>
                 <span className="mt-3 block text-sm">{formatMoney(item.amountCents, currency)}</span>
                 <span className="mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em]">

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 
+import { Wordmark } from "@/components/wordmark";
 import { confirmAge } from "@/server/actions";
 
 const regions = [
@@ -15,7 +16,7 @@ export function AgeGate() {
 
   return (
     <main className="flex min-h-dvh flex-col justify-between px-5 py-8 sm:px-12">
-      <p className="text-[11px] uppercase tracking-[0.32em]">Élevé Select</p>
+      <Wordmark priority size={84} />
       <div className="mx-auto w-full max-w-xl py-16">
         <h1 className="font-serif text-6xl leading-[0.85] sm:text-8xl">Age and region</h1>
         <p className="mt-6 max-w-md text-sm leading-relaxed text-mute">

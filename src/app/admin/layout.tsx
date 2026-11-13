@@ -9,6 +9,7 @@ const links = [
   ["/admin/events", "Drops"],
   ["/admin/inventory", "Inventory"],
   ["/admin/orders", "Orders"],
+  ["/admin/pickup", "Pickup"],
 ];
 
 export const metadata = { robots: { index: false, follow: false } };

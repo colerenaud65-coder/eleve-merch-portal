@@ -1,8 +1,10 @@
 import Image from "next/image";
 import QRCode from "qrcode";
 
-import { orderStatusLabel } from "@/lib/labels";
-import { formatMoney } from "@/server/money";
+import { Wordmark } from "@/components/wordmark";
+import { orderStatusLabel, termsLabel } from "@/lib/labels";
+import { formatMoney, HOLD_HOURS } from "@/server/money";
+import { formatWhen } from "@/server/time";
 import type { getOrderDetail } from "@/server/queries";
 
 type Detail = NonNullable<Awaited<ReturnType<typeof getOrderDetail>>>;
@@ -30,7 +32,8 @@ export async function OrderTicket({
   return (
     <article className="grid gap-8 border border-ink p-5 sm:p-8 lg:grid-cols-[1fr_220px]">
       <div>
-        <p className="text-[11px] uppercase tracking-[0.2em] text-mute">{order.number}</p>
+        <Wordmark size={28} />
+        <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-mute">{order.number}</p>
         <h1 className="mt-2 font-serif text-5xl leading-none">
           {orderStatusLabel[order.status] ?? order.status}
         </h1>
@@ -75,9 +78,9 @@ export async function OrderTicket({
             <p className="text-[11px] uppercase tracking-[0.18em]">Interac e-Transfer</p>
             <p className="mt-3 font-serif text-3xl tracking-wide">{order.transferReference}</p>
             <p className="mt-3 text-sm leading-relaxed text-mute">
-              Send {formatMoney(depositOutstanding, order.currency)}{" "}
-              {recipient ? `to ${recipient}` : "to the Interac address Cole gives you"}. Put the reference in the
-              message. The balance is collected at pickup. This desk does not take card payments.
+              {order.paymentTerms === "deposit"
+                ? `Send ${formatMoney(depositOutstanding, order.currency)} ${recipient ? `to ${recipient}` : "to the Interac address Cole gives you"}. Put the reference in the message. Numbered boxes are held for ${HOLD_HOURS} hours, then returned if the deposit has not arrived. The balance is collected at pickup.`
+                : `${termsLabel[order.paymentTerms] ?? order.paymentTerms}. ${order.dueAt ? `Due ${formatWhen(order.dueAt, event?.timeZone ?? "America/Toronto")}.` : ""} No deposit is taken on this order.`}
             </p>
           </div>
         ) : null}

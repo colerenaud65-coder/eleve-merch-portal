@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Wordmark } from "@/components/wordmark";
+
 import { getDb } from "@/db/index";
 import { regions } from "@/db/schema";
 import { getCurrentAccount } from "@/server/auth";
@@ -33,8 +35,8 @@ export async function Header({
   return (
     <header className="border-b border-ink">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-4">
-        <Link href="/" className="font-serif text-4xl leading-none tracking-tight">
-          Élevé
+        <Link href="/" className="block" aria-label="Élevé Select">
+          <Wordmark priority size={36} />
         </Link>
         <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.18em]">
           <Link href="/events">Drops</Link>

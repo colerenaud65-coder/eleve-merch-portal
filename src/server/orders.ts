@@ -15,7 +15,7 @@ import {
   regions,
   type Order,
 } from "@/db/schema";
-import { depositDue } from "@/server/money";
+import { depositDue, holdExpiry, termsDays } from "@/server/money";
 
 export class OrderError extends Error {
   constructor(
@@ -292,13 +292,15 @@ export async function placeOrder(input: {
       (sum, line) => sum + line.unitAmountCents * line.quantity,
       0,
     );
-    const depositRequiredCents = depositDue(subtotalCents);
+    const terms = input.kind === "wholesale" ? account.paymentTerms || "deposit" : "deposit";
+    const netDays = termsDays(terms);
+    const depositRequiredCents = netDays > 0 ? 0 : depositDue(subtotalCents);
     const [order] = await tx
       .insert(orders)
       .values({
         number: await uniqueNumber(tx),
         kind: input.kind,
-        status: "awaiting_deposit",
+        status: netDays > 0 ? "on_terms" : "awaiting_deposit",
         accountId: account.id,
         regionId,
         eventId,
@@ -309,6 +311,9 @@ export async function placeOrder(input: {
         balanceCents: subtotalCents,
         transferReference: referenceFor(region.slug),
         pickupToken: randomBytes(24).toString("base64url"),
+        paymentTerms: terms,
+        holdExpiresAt: netDays > 0 ? null : holdExpiry(),
+        dueAt: netDays > 0 ? new Date(Date.now() + netDays * 24 * 60 * 60 * 1000) : null,
         notes: input.notes?.trim() || null,
       })
       .returning();
@@ -350,6 +355,29 @@ export async function cancelOrder(orderId: string) {
   });
 }
 
+export async function releaseExpiredHolds() {
+  const expired = await getDb()
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.status, "awaiting_deposit"),
+        eq(orders.depositReceivedCents, 0),
+        sql`${orders.holdExpiresAt} is not null and ${orders.holdExpiresAt} < now()`,
+      ),
+    );
+  for (const row of expired) {
+    await cancelOrder(row.id);
+    await getDb()
+      .update(orders)
+      .set({
+        notes: "Deposit hold expired. Numbered boxes returned to stock.",
+      })
+      .where(eq(orders.id, row.id));
+  }
+  return expired.length;
+}
+
 export async function recordDeposit(input: {
   orderId: string;
   amountCents: number;
@@ -369,13 +397,18 @@ export async function recordDeposit(input: {
     const depositReceivedCents = order.depositReceivedCents + input.amountCents;
     const balanceCents = Math.max(order.subtotalCents - depositReceivedCents, 0);
     let status = order.status;
-    if (
+    let holdExpiresAt = order.holdExpiresAt;
+    if (status === "on_terms") {
+      status = depositReceivedCents >= order.subtotalCents ? "deposit_received" : "on_terms";
+      if (status === "deposit_received") holdExpiresAt = null;
+    } else if (
       status === "awaiting_deposit" ||
       status === "deposit_partial" ||
       status === "deposit_received"
     ) {
       status =
         depositReceivedCents < order.depositRequiredCents ? "deposit_partial" : "deposit_received";
+      if (depositReceivedCents >= order.depositRequiredCents) holdExpiresAt = null;
     }
     await tx.insert(deposits).values({
       orderId: order.id,
@@ -386,7 +419,7 @@ export async function recordDeposit(input: {
     });
     const [updated] = await tx
       .update(orders)
-      .set({ depositReceivedCents, balanceCents, status })
+      .set({ depositReceivedCents, balanceCents, status, holdExpiresAt })
       .where(eq(orders.id, order.id))
       .returning();
     return updated;
@@ -397,7 +430,11 @@ export async function markReady(orderId: string) {
   return getDb().transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw new OrderError("Order not found.", "order");
-    if (order.status !== "deposit_received" && order.status !== "deposit_partial") {
+    if (
+      order.status !== "deposit_received" &&
+      order.status !== "deposit_partial" &&
+      order.status !== "on_terms"
+    ) {
       throw new OrderError("Record the deposit before marking the order ready.", "status");
     }
     const [updated] = await tx
@@ -413,14 +450,18 @@ export async function completeOrder(orderId: string) {
   return getDb().transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw new OrderError("Order not found.", "order");
-    if (order.status !== "ready_for_pickup" && order.status !== "deposit_received") {
+    if (
+      order.status !== "ready_for_pickup" &&
+      order.status !== "deposit_received" &&
+      order.status !== "on_terms"
+    ) {
       throw new OrderError("This order is not ready to close.", "status");
     }
     const lines = await linesFor(tx, order.id);
     await commitSold(tx, order.regionId, await stockNeeds(tx, lines));
     const [updated] = await tx
       .update(orders)
-      .set({ status: "completed" })
+      .set({ status: "completed", checkedInAt: order.checkedInAt ?? new Date() })
       .where(eq(orders.id, order.id))
       .returning();
     return updated;

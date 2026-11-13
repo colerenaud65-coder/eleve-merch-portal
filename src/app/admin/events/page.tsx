@@ -1,11 +1,30 @@
-import { saveEvent, setCompliance } from "@/server/actions";
-import { listAllEvents, listRetailRegions } from "@/server/queries";
+import { asc, eq } from "drizzle-orm";
+
+import { getDb } from "@/db/index";
+import { products } from "@/db/schema";
+import { saveEvent, saveLineups, setCompliance } from "@/server/actions";
+import { listAllEvents, listLineups, listRetailRegions } from "@/server/queries";
 import { formatWhen, preorderPhase } from "@/server/time";
 
 export const metadata = { title: "Drops" };
 
 export default async function AdminEventsPage() {
-  const [rows, retail] = await Promise.all([listAllEvents(), listRetailRegions()]);
+  const [rows, retail, selections] = await Promise.all([
+    listAllEvents(),
+    listRetailRegions(),
+    getDb()
+      .select()
+      .from(products)
+      .where(eq(products.kind, "selection"))
+      .orderBy(asc(products.sortOrder)),
+  ]);
+  const lineupRows = await Promise.all(rows.map((row) => listLineups(row.event.id)));
+  const lineupByEvent = new Map(
+    rows.map((row, index) => [
+      row.event.id,
+      new Map(lineupRows[index]?.map((line) => [line.productId, line.lineup]) ?? []),
+    ]),
+  );
 
   return (
     <main className="space-y-12">
@@ -32,6 +51,23 @@ export default async function AdminEventsPage() {
                     Clear flag
                   </button>
                 </div>
+              </form>
+              <form action={saveLineups} className="mt-6 grid gap-3">
+                <input type="hidden" name="eventId" value={event.id} />
+                <p className="text-[11px] uppercase tracking-[0.16em]">Strain lineup</p>
+                {selections
+                  .filter((product) => product.active)
+                  .map((product) => (
+                    <label key={product.id}>
+                      {String(product.editionNumber ?? 0).padStart(2, "0")}/16
+                      <input
+                        name={`lineup:${product.id}`}
+                        defaultValue={lineupByEvent.get(event.id)?.get(product.id) ?? ""}
+                        placeholder="Strains in this box"
+                      />
+                    </label>
+                  ))}
+                <button type="submit">Save lineup</button>
               </form>
             </article>
           ))}
