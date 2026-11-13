@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
-import { referenceCodes } from "@/db/catalog";
+import { editionLabel, referenceCodes } from "@/db/catalog";
 import { getDb, type Database } from "@/db/index";
 import {
   accounts,
+  boxAllocations,
+  dropStrains,
   events,
   inventory,
   orderLines,
@@ -33,6 +35,7 @@ export type LineInput = {
   productId: string;
   quantity: number;
   regionId: string;
+  strainPosition?: number | null;
 };
 
 const MIXED =
@@ -61,18 +64,12 @@ async function stockNeeds(tx: Tx, lines: { productId: string; quantity: number }
   const rows = await tx.select().from(products).where(inArray(products.id, ids));
   const byId = new Map(rows.map((row) => [row.id, row]));
   const needs = new Map<string, number>();
-  const boxes = await tx.select().from(products).where(eq(products.kind, "selection"));
 
   for (const line of lines) {
     const product = byId.get(line.productId);
     if (!product) throw new OrderError("Unknown product.", "product");
     if (product.kind === "selection_set") {
-      if (boxes.length !== 16) {
-        throw new OrderError("The selection of 16 is not fully catalogued.", "catalog");
-      }
-      for (const box of boxes) {
-        needs.set(box.id, (needs.get(box.id) ?? 0) + line.quantity);
-      }
+      needs.set(product.id, (needs.get(product.id) ?? 0) + line.quantity);
     } else {
       needs.set(product.id, (needs.get(product.id) ?? 0) + line.quantity);
     }
@@ -142,6 +139,165 @@ async function commitSold(tx: Tx, regionId: string, needs: Map<string, number>) 
       throw new OrderError("Stock could not be marked picked up.", "stock");
     }
   }
+}
+
+async function completePreorder(
+  tx: Tx,
+  args: {
+    account: { id: string; paymentTerms: string };
+    region: { id: string; slug: string; currency: string; enabled: boolean };
+    eventId: string;
+    lines: LineInput[];
+    notes: string | null;
+  },
+): Promise<Order> {
+  const [event] = await tx.select().from(events).where(eq(events.id, args.eventId)).for("update");
+  if (!event || event.cancelled) throw new OrderError("This drop is not open.", "event");
+  const [box] = await tx.select().from(products).where(eq(products.slug, "selection-box")).limit(1);
+  const [jar] = await tx.select().from(products).where(eq(products.slug, "jar-7g")).limit(1);
+  if (!box || !jar) throw new OrderError("The drop catalog is missing.", "catalog");
+
+  const boxLine = args.lines.find((line) => line.productId === box.id);
+  const jarLines = args.lines.filter((line) => line.productId === jar.id);
+  if (args.lines.some((line) => line.productId !== box.id && line.productId !== jar.id)) {
+    throw new OrderError("This drop sells the selection box and jars of its four strains.", "product");
+  }
+  const boxQty = boxLine?.quantity ?? 0;
+  if (boxQty > 16) throw new OrderError("A drop has sixteen boxes.", "quantity");
+
+  const strains = await tx
+    .select()
+    .from(dropStrains)
+    .where(eq(dropStrains.eventId, event.id))
+    .orderBy(asc(dropStrains.position));
+  if (strains.filter((strain) => strain.name.trim()).length < 4) {
+    throw new OrderError("The four-strain lineup is not posted for this drop.", "lineup");
+  }
+
+  if (boxQty > 0) {
+    const reserved = await tx
+      .update(events)
+      .set({ boxReserved: sql`${events.boxReserved} + ${boxQty}` })
+      .where(and(eq(events.id, event.id), sql`${events.boxOnHand} - ${events.boxReserved} >= ${boxQty}`))
+      .returning({ id: events.id });
+    if (reserved.length === 0) {
+      throw new OrderError("Not enough numbered boxes are left in this drop.", "stock");
+    }
+  }
+
+  for (const line of jarLines) {
+    const position = line.strainPosition ?? 0;
+    if (position < 1 || position > 4) throw new OrderError("Choose one of the four strains.", "strain");
+    const reserved = await tx
+      .update(dropStrains)
+      .set({ jarReserved: sql`${dropStrains.jarReserved} + ${line.quantity}` })
+      .where(
+        and(
+          eq(dropStrains.eventId, event.id),
+          eq(dropStrains.position, position),
+          sql`${dropStrains.jarOnHand} - ${dropStrains.jarReserved} >= ${line.quantity}`,
+        ),
+      )
+      .returning({ id: dropStrains.id });
+    if (reserved.length === 0) throw new OrderError("That jar is sold out for this drop.", "stock");
+  }
+
+  const [boxPrice] = boxQty
+    ? await tx
+        .select()
+        .from(prices)
+        .where(and(eq(prices.productId, box.id), eq(prices.regionId, args.region.id), eq(prices.channel, "retail")))
+        .limit(1)
+    : [];
+  const [jarPrice] = jarLines.length
+    ? await tx
+        .select()
+        .from(prices)
+        .where(and(eq(prices.productId, jar.id), eq(prices.regionId, args.region.id), eq(prices.channel, "retail")))
+        .limit(1)
+    : [];
+  if (boxQty && !boxPrice) throw new OrderError("The box has no price in this region.", "price");
+  if (jarLines.length && !jarPrice) throw new OrderError("The jar has no price in this region.", "price");
+
+  const numbers: number[] = [];
+  if (boxQty > 0) {
+    const taken = await tx.select().from(boxAllocations).where(eq(boxAllocations.eventId, event.id));
+    const used = new Set(taken.map((row) => row.number));
+    for (let number = 1; number <= 16 && numbers.length < boxQty; number += 1) {
+      if (!used.has(number)) numbers.push(number);
+    }
+    if (numbers.length < boxQty) {
+      throw new OrderError("Not enough numbered boxes are left in this drop.", "stock");
+    }
+  }
+
+  const priced: {
+    productId: string;
+    quantity: number;
+    unitAmountCents: number;
+    label: string;
+    strainPosition: number | null;
+  }[] = [];
+  if (boxQty && boxPrice) {
+    priced.push({
+      productId: box.id,
+      quantity: boxQty,
+      unitAmountCents: boxPrice.amountCents,
+      label: numbers.map((number) => editionLabel(number)).join(" · "),
+      strainPosition: null,
+    });
+  }
+  for (const line of jarLines) {
+    const strain = strains.find((item) => item.position === line.strainPosition);
+    priced.push({
+      productId: jar.id,
+      quantity: line.quantity,
+      unitAmountCents: jarPrice!.amountCents,
+      label: `7 g · ${strain?.name ?? "Jar"}`,
+      strainPosition: line.strainPosition ?? null,
+    });
+  }
+
+  const subtotalCents = priced.reduce((sum, line) => sum + line.unitAmountCents * line.quantity, 0);
+  const depositRequiredCents = depositDue(subtotalCents);
+  const [order] = await tx
+    .insert(orders)
+    .values({
+      number: await uniqueNumber(tx),
+      kind: "preorder",
+      status: "awaiting_deposit",
+      accountId: args.account.id,
+      regionId: args.region.id,
+      eventId: event.id,
+      currency: args.region.currency,
+      subtotalCents,
+      depositRequiredCents,
+      depositReceivedCents: 0,
+      balanceCents: subtotalCents,
+      transferReference: referenceFor(args.region.slug),
+      pickupToken: randomBytes(24).toString("base64url"),
+      paymentTerms: "deposit",
+      holdExpiresAt: holdExpiry(),
+      notes: args.notes?.trim() || null,
+    })
+    .returning();
+
+  if (numbers.length > 0) {
+    await tx.insert(boxAllocations).values(
+      numbers.map((number) => ({ eventId: event.id, orderId: order.id, number })),
+    );
+  }
+  await tx.insert(orderLines).values(
+    priced.map((line) => ({
+      orderId: order.id,
+      productId: line.productId,
+      quantity: line.quantity,
+      unitAmountCents: line.unitAmountCents,
+      label: line.label,
+      strainPosition: line.strainPosition,
+    })),
+  );
+  return order;
 }
 
 export async function placeOrder(input: {
@@ -231,6 +387,19 @@ export async function placeOrder(input: {
     }
     if (channel === "wholesale" && region.channel !== "wholesale") {
       throw new OrderError("Wholesale orders use one exclusive Ontario region.", "region");
+    }
+    if (!region.enabled) {
+      throw new OrderError("This region is not open.", "region");
+    }
+
+    if (input.kind === "preorder") {
+      return completePreorder(tx, {
+        account,
+        region,
+        eventId: eventId!,
+        lines,
+        notes: input.notes ?? null,
+      });
     }
 
     const productIds = [...new Set(lines.map((line) => line.productId))];
@@ -345,7 +514,35 @@ export async function cancelOrder(orderId: string) {
       throw new OrderError("A completed pickup stays on the books.", "status");
     }
     const lines = await linesFor(tx, order.id);
-    await release(tx, order.regionId, await stockNeeds(tx, lines));
+    const allocated = await tx.select().from(boxAllocations).where(eq(boxAllocations.orderId, order.id));
+    if (order.eventId && (allocated.length > 0 || lines.some((line) => line.strainPosition))) {
+      if (allocated.length > 0) {
+        const released = await tx
+          .update(events)
+          .set({ boxReserved: sql`${events.boxReserved} - ${allocated.length}` })
+          .where(and(eq(events.id, order.eventId), sql`${events.boxReserved} >= ${allocated.length}`))
+          .returning({ id: events.id });
+        if (released.length === 0) throw new OrderError("Reserved boxes could not be released.", "stock");
+        await tx.delete(boxAllocations).where(eq(boxAllocations.orderId, order.id));
+      }
+      for (const line of lines) {
+        if (!line.strainPosition) continue;
+        const released = await tx
+          .update(dropStrains)
+          .set({ jarReserved: sql`${dropStrains.jarReserved} - ${line.quantity}` })
+          .where(
+            and(
+              eq(dropStrains.eventId, order.eventId),
+              eq(dropStrains.position, line.strainPosition),
+              sql`${dropStrains.jarReserved} >= ${line.quantity}`,
+            ),
+          )
+          .returning({ id: dropStrains.id });
+        if (released.length === 0) throw new OrderError("Reserved jars could not be released.", "stock");
+      }
+    } else {
+      await release(tx, order.regionId, await stockNeeds(tx, lines));
+    }
     const [updated] = await tx
       .update(orders)
       .set({ status: "cancelled" })
@@ -458,7 +655,47 @@ export async function completeOrder(orderId: string) {
       throw new OrderError("This order is not ready to close.", "status");
     }
     const lines = await linesFor(tx, order.id);
-    await commitSold(tx, order.regionId, await stockNeeds(tx, lines));
+    const allocated = await tx.select().from(boxAllocations).where(eq(boxAllocations.orderId, order.id));
+    if (order.eventId && (allocated.length > 0 || lines.some((line) => line.strainPosition))) {
+      if (allocated.length > 0) {
+        const sold = await tx
+          .update(events)
+          .set({
+            boxOnHand: sql`${events.boxOnHand} - ${allocated.length}`,
+            boxReserved: sql`${events.boxReserved} - ${allocated.length}`,
+          })
+          .where(
+            and(
+              eq(events.id, order.eventId),
+              sql`${events.boxReserved} >= ${allocated.length}`,
+              sql`${events.boxOnHand} >= ${allocated.length}`,
+            ),
+          )
+          .returning({ id: events.id });
+        if (sold.length === 0) throw new OrderError("Numbered boxes could not be marked picked up.", "stock");
+      }
+      for (const line of lines) {
+        if (!line.strainPosition) continue;
+        const sold = await tx
+          .update(dropStrains)
+          .set({
+            jarOnHand: sql`${dropStrains.jarOnHand} - ${line.quantity}`,
+            jarReserved: sql`${dropStrains.jarReserved} - ${line.quantity}`,
+          })
+          .where(
+            and(
+              eq(dropStrains.eventId, order.eventId),
+              eq(dropStrains.position, line.strainPosition),
+              sql`${dropStrains.jarReserved} >= ${line.quantity}`,
+              sql`${dropStrains.jarOnHand} >= ${line.quantity}`,
+            ),
+          )
+          .returning({ id: dropStrains.id });
+        if (sold.length === 0) throw new OrderError("Jars could not be marked picked up.", "stock");
+      }
+    } else {
+      await commitSold(tx, order.regionId, await stockNeeds(tx, lines));
+    }
     const [updated] = await tx
       .update(orders)
       .set({ status: "completed", checkedInAt: order.checkedInAt ?? new Date() })

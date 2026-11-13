@@ -8,7 +8,6 @@ import { confirmAge } from "@/server/actions";
 const regions = [
   { slug: "toronto", label: "Toronto · 19+" },
   { slug: "vancouver", label: "Vancouver · 19+" },
-  { slug: "united-states", label: "United States · 21+" },
 ];
 
 export function AgeGate() {

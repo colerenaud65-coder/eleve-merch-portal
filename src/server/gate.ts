@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { retailRegions } from "@/db/catalog";
+import { customerRetailRegions } from "@/db/catalog";
 
 const COOKIE = "eleve_gate";
 
@@ -45,7 +45,7 @@ export async function readGate(): Promise<(Gate & { regionName: string; minimumA
   if (!raw) return null;
   const gate = verify(raw, secret);
   if (!gate) return null;
-  const region = retailRegions.find((item) => item.slug === gate.regionSlug);
+  const region = customerRetailRegions.find((item) => item.slug === gate.regionSlug);
   if (!region || region.country !== gate.country) return null;
   return { ...gate, regionName: region.name, minimumAge: region.minimumAge };
 }

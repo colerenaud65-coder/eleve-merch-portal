@@ -95,6 +95,21 @@ export const regionSeeds: RegionSeed[] = [
 ];
 
 export const retailRegions = regionSeeds.filter((region) => region.channel === "retail");
+export const customerRetailRegions = retailRegions.filter((region) => region.slug !== "united-states");
+
+export const TORONTO_DROP = {
+  name: "Sunday Service",
+  venue: "Sunday Service by Caked, 1196 Queen St W",
+  city: "Toronto",
+  summary: "Every Sunday, 12:00–6:00 PM ET. Every numbered box in the drop carries the same four strains. Jars are those strains, sold one by one.",
+};
+
+export const VANCOUVER_DROP = {
+  name: "Dank Club",
+  venue: "Dank Club, 6416 Main St",
+  city: "Vancouver",
+  summary: "Pop-up at Dank Club. The date is set for each drop.",
+};
 export const wholesaleRegions = regionSeeds.filter((region) => region.channel === "wholesale");
 
 export const SELECTION_SPEC =
@@ -114,26 +129,18 @@ export type ProductSeed = {
   sortOrder: number;
 };
 
-function selectionProducts(): ProductSeed[] {
-  return Array.from({ length: EDITION_SIZE }, (_, index) => {
-    const number = index + 1;
-    const label = String(number).padStart(2, "0");
-    return {
-      slug: `selection-${label}`,
-      name: `Selection ${label}`,
-      kind: "selection" as const,
-      editionNumber: number,
-      editionSize: EDITION_SIZE,
-      subtitle: "Numbered box",
-      description: SELECTION_SPEC,
-      imagePath: null,
-      sortOrder: number,
-    };
-  });
-}
-
 export const productSeeds: ProductSeed[] = [
-  ...selectionProducts(),
+  {
+    slug: "selection-box",
+    name: "Selection box",
+    kind: "selection",
+    editionNumber: null,
+    editionSize: EDITION_SIZE,
+    subtitle: "Numbered box",
+    description: SELECTION_SPEC,
+    imagePath: null,
+    sortOrder: 1,
+  },
   {
     slug: "jar-7g",
     name: "7 g jar",
@@ -174,53 +181,7 @@ export type EventSeed = {
   complianceNote: string | null;
 };
 
-export const eventSeeds: EventSeed[] = [
-  {
-    slug: "toronto-king-west",
-    name: "King West",
-    regionSlug: "toronto",
-    venue: "King West. The room address is sent with pickup.",
-    city: "Toronto",
-    summary: "Sixteen boxes and the jar line. Deposit by e-Transfer, balance at the door.",
-    timeZone: "America/Toronto",
-    startsAt: "2026-12-12T23:00:00.000Z",
-    endsAt: "2026-12-13T03:00:00.000Z",
-    preorderOpensAt: "2026-11-01T15:00:00.000Z",
-    preorderClosesAt: "2026-12-12T22:00:00.000Z",
-    complianceConfirmed: true,
-    complianceNote: "Confirmed for the Toronto pop-up.",
-  },
-  {
-    slug: "vancouver-railtown",
-    name: "Railtown",
-    regionSlug: "vancouver",
-    venue: "Railtown. The room address is sent with pickup.",
-    city: "Vancouver",
-    summary: "The same sixteen, Vancouver stock. Preorders stay shut until compliance is confirmed.",
-    timeZone: "America/Vancouver",
-    startsAt: "2026-12-20T03:00:00.000Z",
-    endsAt: "2026-12-20T07:00:00.000Z",
-    preorderOpensAt: "2026-11-01T16:00:00.000Z",
-    preorderClosesAt: "2026-12-19T23:00:00.000Z",
-    complianceConfirmed: false,
-    complianceNote: null,
-  },
-  {
-    slug: "los-angeles-arts-district",
-    name: "Arts District",
-    regionSlug: "united-states",
-    venue: "Arts District. The room address is sent with pickup.",
-    city: "Los Angeles",
-    summary: "US stock only. Preorders open on the date below.",
-    timeZone: "America/Los_Angeles",
-    startsAt: "2027-01-17T03:00:00.000Z",
-    endsAt: "2027-01-17T07:00:00.000Z",
-    preorderOpensAt: "2026-12-20T16:00:00.000Z",
-    preorderClosesAt: "2027-01-16T23:00:00.000Z",
-    complianceConfirmed: true,
-    complianceNote: "Confirmed. The window has not opened.",
-  },
-];
+export const eventSeeds: EventSeed[] = [];
 
 export function editionLabel(editionNumber: number, editionSize = EDITION_SIZE) {
   return `${String(editionNumber).padStart(2, "0")}/${String(editionSize).padStart(2, "0")}`;

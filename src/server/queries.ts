@@ -3,6 +3,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/index";
 import {
   accessRequests,
+  dropStrains,
   accounts,
   deposits,
   events,
@@ -26,11 +27,11 @@ export async function getRegionBySlug(slug: string) {
 
 export async function listEventsForRegion(slug: string) {
   const region = await getRegionBySlug(slug);
-  if (!region) return [];
+  if (!region?.enabled) return [];
   return getDb()
     .select()
     .from(events)
-    .where(eq(events.regionId, region.id))
+    .where(and(eq(events.regionId, region.id), eq(events.cancelled, false)))
     .orderBy(asc(events.startsAt));
 }
 
@@ -312,7 +313,7 @@ export async function listRetailRegions() {
   return getDb()
     .select()
     .from(regions)
-    .where(eq(regions.channel, "retail"))
+    .where(and(eq(regions.channel, "retail"), eq(regions.enabled, true)))
     .orderBy(asc(regions.sortOrder));
 }
 
@@ -376,6 +377,39 @@ export async function listWholesaleBuyers() {
     .leftJoin(regions, eq(regions.id, accounts.regionId))
     .where(eq(accounts.role, "wholesale_buyer"))
     .orderBy(asc(accounts.email));
+}
+
+export async function getDropOffer(eventId: string, regionId: string) {
+  await releaseExpiredHolds();
+  const strains = await getDb()
+    .select()
+    .from(dropStrains)
+    .where(eq(dropStrains.eventId, eventId))
+    .orderBy(asc(dropStrains.position));
+  const [event] = await getDb().select().from(events).where(eq(events.id, eventId)).limit(1);
+  const [box] = await getDb().select().from(products).where(eq(products.slug, "selection-box")).limit(1);
+  const [jar] = await getDb().select().from(products).where(eq(products.slug, "jar-7g")).limit(1);
+  const [boxPrice] = box
+    ? await getDb()
+        .select()
+        .from(prices)
+        .where(and(eq(prices.productId, box.id), eq(prices.regionId, regionId), eq(prices.channel, "retail")))
+        .limit(1)
+    : [];
+  const [jarPrice] = jar
+    ? await getDb()
+        .select()
+        .from(prices)
+        .where(and(eq(prices.productId, jar.id), eq(prices.regionId, regionId), eq(prices.channel, "retail")))
+        .limit(1)
+    : [];
+  return {
+    strains,
+    boxesAvailable: event ? event.boxOnHand - event.boxReserved : 0,
+    boxOnHand: event?.boxOnHand ?? 0,
+    boxCents: boxPrice?.amountCents ?? 0,
+    jarCents: jarPrice?.amountCents ?? 0,
+  };
 }
 
 export async function listDevAccounts() {

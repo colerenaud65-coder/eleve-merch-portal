@@ -60,6 +60,7 @@ export const regions = pgTable("regions", {
   minimumAge: integer("minimum_age").notNull(),
   timeZone: text("time_zone").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
+  enabled: boolean("enabled").notNull().default(true),
 });
 
 export const accounts = pgTable("accounts", {
@@ -136,8 +137,26 @@ export const events = pgTable("events", {
   complianceConfirmed: boolean("compliance_confirmed").notNull().default(false),
   complianceConfirmedAt: timestamp("compliance_confirmed_at", { withTimezone: true }),
   complianceNote: text("compliance_note"),
+  cancelled: boolean("cancelled").notNull().default(false),
+  boxOnHand: integer("box_on_hand").notNull().default(16),
+  boxReserved: integer("box_reserved").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const dropStrains = pgTable(
+  "drop_strains",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    name: text("name").notNull().default(""),
+    jarOnHand: integer("jar_on_hand").notNull().default(0),
+    jarReserved: integer("jar_reserved").notNull().default(0),
+  },
+  (table) => [unique("drop_strains_event_position").on(table.eventId, table.position)],
+);
 
 /**
  * Products carry no region, country, or currency.
@@ -248,6 +267,21 @@ export const orders = pgTable("orders", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const boxAllocations = pgTable(
+  "box_allocations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+  },
+  (table) => [unique("box_allocations_event_number").on(table.eventId, table.number)],
+);
+
 export const orderLines = pgTable("order_lines", {
   id: uuid("id").primaryKey().defaultRandom(),
   orderId: uuid("order_id")
@@ -259,6 +293,7 @@ export const orderLines = pgTable("order_lines", {
   quantity: integer("quantity").notNull(),
   unitAmountCents: integer("unit_amount_cents").notNull(),
   label: text("label").notNull(),
+  strainPosition: integer("strain_position"),
 });
 
 export const deposits = pgTable("deposits", {

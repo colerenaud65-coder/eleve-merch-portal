@@ -2,12 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Countdown } from "@/components/countdown";
-import { editionLabel, JAR_SPEC, SELECTION_SPEC } from "@/db/catalog";
+import { JAR_SPEC, SELECTION_SPEC } from "@/db/catalog";
 import { joinWaitlist } from "@/server/actions";
 import { getCurrentAccount } from "@/server/auth";
 import { readGate } from "@/server/gate";
 import { formatMoney } from "@/server/money";
-import { accountOnWaitlist, getEventBySlug, retailMenu, waitlistForEvent } from "@/server/queries";
+import { accountOnWaitlist, getDropOffer, getEventBySlug, waitlistForEvent } from "@/server/queries";
 import { formatWhen, preorderPhase } from "@/server/time";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
@@ -26,14 +26,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const phase = preorderPhase(row.event);
   const canSeeMenu =
     inRegion &&
+    row.region.enabled &&
+    !row.event.cancelled &&
     account?.status === "approved" &&
     (account.role === "popup_customer" || account.role === "admin");
-  const menu = canSeeMenu ? await retailMenu(row.region.id, row.event.id) : [];
-  const selections = menu.filter((item) => item.kind === "selection");
-  const jars = menu.filter((item) => item.kind === "jar");
-  const soldOut = selections.length > 0 && selections.every((item) => item.available < 1);
-  const waiting =
-    soldOut && account ? await accountOnWaitlist(account.id, row.event.id) : null;
+  const offer = canSeeMenu ? await getDropOffer(row.event.id, row.region.id) : null;
+  const named = offer?.strains.filter((strain) => strain.name.trim()) ?? [];
+  const soldOut = Boolean(offer && offer.boxesAvailable < 1 && named.every((strain) => strain.jarOnHand - strain.jarReserved < 1));
+  const waiting = soldOut && account ? await accountOnWaitlist(account.id, row.event.id) : null;
   const waitCount = soldOut ? (await waitlistForEvent(row.event.id)).length : 0;
 
   return (
@@ -79,37 +79,31 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         </div>
       ) : null}
 
-      {canSeeMenu ? (
+      {row.event.cancelled || !row.region.enabled ? (
+        <p className="mt-10 max-w-md border border-ink p-4 text-sm">This drop is not on the menu.</p>
+      ) : null}
+
+      {canSeeMenu && offer ? (
         <>
           <p className="mt-10 max-w-xl text-sm text-mute">{SELECTION_SPEC}</p>
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {selections.map((item) => (
-              <article key={item.id} className="border border-ink p-3">
-                <p className="font-sans text-sm tracking-[0.18em]">
-                  {editionLabel(item.editionNumber ?? 0)}
-                </p>
-                <h2 className="mt-3 text-sm">{item.lineup || "Lineup not posted"}</h2>
-                <p className="mt-3 text-sm">{formatMoney(item.amountCents, row.region.currency)}</p>
-                <p className="mt-1 text-[11px] uppercase tracking-[0.14em]">
-                  {item.available > 0 ? "Open" : "Reserved"}
-                </p>
-              </article>
-            ))}
-          </div>
-          <ul className="mt-8 divide-y divide-ink border-y border-ink">
-            {jars.map((item) => (
-              <li key={item.id} className="flex flex-wrap items-baseline justify-between gap-4 py-3 text-sm">
-                <span>
-                  {item.name}
-                  <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-mute">{JAR_SPEC}</span>
-                </span>
-                <span>
-                  {formatMoney(item.amountCents, row.region.currency)} · {item.available} on hand
+          <p className="mt-6 text-sm">
+            {offer.boxesAvailable} of {offer.boxOnHand} boxes left · {formatMoney(offer.boxCents, row.region.currency)} each.
+            Numbers are assigned in order, 01/16 through 16/16.
+          </p>
+          <ul className="mt-6 divide-y divide-ink border-y border-ink">
+            {offer.strains.map((strain) => (
+              <li key={strain.id} className="flex flex-wrap items-baseline justify-between gap-3 py-3 text-sm">
+                <span>{strain.name.trim() || `Strain ${strain.position}`}</span>
+                <span className="text-mute">
+                  {JAR_SPEC} · {formatMoney(offer.jarCents, row.region.currency)} · {strain.jarOnHand - strain.jarReserved} left
                 </span>
               </li>
             ))}
           </ul>
-          {phase === "open" && !soldOut ? (
+          {named.length < 4 ? (
+            <p className="mt-6 text-sm">The four-strain lineup is not posted yet.</p>
+          ) : null}
+          {phase === "open" && !soldOut && named.length === 4 ? (
             <Link href={`/events/${row.event.slug}/preorder`} className="btn mt-8">
               Preorder
             </Link>

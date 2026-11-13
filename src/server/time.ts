@@ -10,6 +10,36 @@ export function formatWhen(date: Date, timeZone: string) {
   }).format(date);
 }
 
+export function zonedLocalToUtc(local: string, timeZone: string) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) {
+    throw new Error(`Expected a local time, received ${local}.`);
+  }
+  const asUtc = new Date(`${local}:00Z`);
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(asUtc);
+  const part = Object.fromEntries(
+    formatted.filter((item) => item.type !== "literal").map((item) => [item.type, item.value]),
+  );
+  const hour = part.hour === "24" ? "00" : part.hour;
+  const zonedAsUtc = Date.UTC(
+    Number(part.year),
+    Number(part.month) - 1,
+    Number(part.day),
+    Number(hour),
+    Number(part.minute),
+    Number(part.second),
+  );
+  return new Date(asUtc.getTime() - (zonedAsUtc - asUtc.getTime()));
+}
+
 export function todayInZone(timeZone: string, now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,

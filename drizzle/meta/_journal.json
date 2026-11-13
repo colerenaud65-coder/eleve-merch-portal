@@ -15,6 +15,13 @@
       "when": 1794578838283,
       "tag": "0001_tiresome_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794584665095,
+      "tag": "0002_chunky_doctor_strange",
+      "breakpoints": true
     }
   ]
 }

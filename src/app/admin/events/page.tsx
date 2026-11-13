@@ -1,30 +1,16 @@
-import { asc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 
 import { getDb } from "@/db/index";
-import { products } from "@/db/schema";
-import { saveEvent, saveLineups, setCompliance } from "@/server/actions";
-import { listAllEvents, listLineups, listRetailRegions } from "@/server/queries";
+import { dropStrains } from "@/db/schema";
+import { saveDrop, saveEvent, setCompliance } from "@/server/actions";
+import { listAllEvents, listRetailRegions } from "@/server/queries";
 import { formatWhen, preorderPhase } from "@/server/time";
 
 export const metadata = { title: "Drops" };
 
 export default async function AdminEventsPage() {
-  const [rows, retail, selections] = await Promise.all([
-    listAllEvents(),
-    listRetailRegions(),
-    getDb()
-      .select()
-      .from(products)
-      .where(eq(products.kind, "selection"))
-      .orderBy(asc(products.sortOrder)),
-  ]);
-  const lineupRows = await Promise.all(rows.map((row) => listLineups(row.event.id)));
-  const lineupByEvent = new Map(
-    rows.map((row, index) => [
-      row.event.id,
-      new Map(lineupRows[index]?.map((line) => [line.productId, line.lineup]) ?? []),
-    ]),
-  );
+  const [rows, retail] = await Promise.all([listAllEvents(), listRetailRegions()]);
+  const strainRows = await getDb().select().from(dropStrains).orderBy(asc(dropStrains.position));
 
   return (
     <main className="space-y-12">
@@ -52,22 +38,38 @@ export default async function AdminEventsPage() {
                   </button>
                 </div>
               </form>
-              <form action={saveLineups} className="mt-6 grid gap-3">
+              <form action={saveDrop} className="mt-6 grid gap-3">
                 <input type="hidden" name="eventId" value={event.id} />
-                <p className="text-[11px] uppercase tracking-[0.16em]">Strain lineup</p>
-                {selections
-                  .filter((product) => product.active)
-                  .map((product) => (
-                    <label key={product.id}>
-                      {String(product.editionNumber ?? 0).padStart(2, "0")}/16
-                      <input
-                        name={`lineup:${product.id}`}
-                        defaultValue={lineupByEvent.get(event.id)?.get(product.id) ?? ""}
-                        placeholder="Strains in this box"
-                      />
-                    </label>
-                  ))}
-                <button type="submit">Save lineup</button>
+                <p className="text-[11px] uppercase tracking-[0.16em]">One lineup for every box</p>
+                <label>
+                  Boxes in this drop
+                  <input name="boxOnHand" type="number" min={event.boxReserved} max={16} defaultValue={event.boxOnHand} />
+                </label>
+                {[1, 2, 3, 4].map((position) => {
+                  const strain = strainRows.find((row) => row.eventId === event.id && row.position === position);
+                  return (
+                    <div key={position} className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+                      <label>
+                        Strain {position}
+                        <input name={`strain:${position}`} defaultValue={strain?.name ?? ""} />
+                      </label>
+                      <label>
+                        Jar stock
+                        <input
+                          name={`jars:${position}`}
+                          type="number"
+                          min={strain?.jarReserved ?? 0}
+                          defaultValue={strain?.jarOnHand ?? 0}
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+                <label className="flex items-center gap-2 normal-case tracking-normal">
+                  <input type="checkbox" name="cancelled" value="yes" defaultChecked={event.cancelled} />
+                  Cancel this week
+                </label>
+                <button type="submit">Save drop</button>
               </form>
             </article>
           ))}

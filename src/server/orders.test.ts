@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { config } from "dotenv";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 config({ path: ".env.local" });
 
 import { getDb } from "../db/index";
-import { accounts, events, inventory, orders, products, regions, waitlistEntries } from "../db/schema";
+import { accounts, dropStrains, events, inventory, orderLines, orders, products, regions, waitlistEntries } from "../db/schema";
 import { OrderError, cancelOrder, placeOrder, recordDeposit, releaseExpiredHolds } from "./orders";
 
 async function accountByEmail(email: string) {
@@ -42,19 +42,30 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   const pending = await accountByEmail("pending@eleve.select");
   const applicant = await accountByEmail("applicant@eleve.select");
   const buyer = await accountByEmail("buyer@eleve.select");
-  const box = await productBySlug("selection-01");
+  const box = await productBySlug("selection-box");
   const jar = await productBySlug("jar-7g");
   const set = await productBySlug("selection-of-16");
-  const kingWest = await eventBySlug("toronto-king-west");
-  const railtown = await eventBySlug("vancouver-railtown");
-  const losAngeles = await eventBySlug("los-angeles-arts-district");
+  const sunday = (
+    await getDb()
+      .select()
+      .from(events)
+      .where(and(eq(events.regionId, toronto.id), eq(events.cancelled, false), eq(events.complianceConfirmed, true)))
+  ).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0];
+  if (!sunday) throw new Error("Missing Sunday Service drop");
+  await getDb()
+    .update(dropStrains)
+    .set({ name: "Cut" })
+    .where(eq(dropStrains.eventId, sunday.id));
+  const dank = await eventBySlug("dank-club");
+  const unitedStates = await regionBySlug("united-states");
+  assert.equal(unitedStates.enabled, false);
 
   await assert.rejects(
     () =>
       placeOrder({
         accountId: collector.id,
         kind: "preorder",
-        eventId: kingWest.id,
+        eventId: sunday.id,
         lines: [
           { productId: box.id, quantity: 1, regionId: toronto.id },
           { productId: jar.id, quantity: 1, regionId: vancouver.id },
@@ -68,7 +79,7 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
       placeOrder({
         accountId: pending.id,
         kind: "preorder",
-        eventId: kingWest.id,
+        eventId: sunday.id,
         lines: [{ productId: jar.id, quantity: 1, regionId: toronto.id }],
       }),
     (error: unknown) => error instanceof OrderError && error.code === "account",
@@ -79,30 +90,19 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
       placeOrder({
         accountId: collector.id,
         kind: "preorder",
-        eventId: railtown.id,
-        lines: [{ productId: jar.id, quantity: 1, regionId: vancouver.id }],
+        eventId: dank.id,
+        lines: [{ productId: jar.id, quantity: 1, regionId: vancouver.id, strainPosition: 1 }],
       }),
     (error: unknown) => error instanceof OrderError && error.code === "compliance",
-  );
-
-  await assert.rejects(
-    () =>
-      placeOrder({
-        accountId: collector.id,
-        kind: "preorder",
-        eventId: losAngeles.id,
-        lines: [{ productId: jar.id, quantity: 1, regionId: losAngeles.regionId }],
-      }),
-    (error: unknown) => error instanceof OrderError && error.code === "window",
   );
 
   const preorder = await placeOrder({
     accountId: collector.id,
     kind: "preorder",
-    eventId: kingWest.id,
+    eventId: sunday.id,
     lines: [
       { productId: box.id, quantity: 1, regionId: toronto.id },
-      { productId: jar.id, quantity: 1, regionId: toronto.id },
+      { productId: jar.id, quantity: 1, regionId: toronto.id, strainPosition: 1 },
     ],
   });
   assert.equal(preorder.currency, "CAD");
@@ -112,23 +112,35 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   assert.equal(preorder.balanceCents, 36000);
   assert.match(preorder.transferReference, /^ELV-TOR-/);
   assert.equal(preorder.status, "awaiting_deposit");
+  const preorderLines = await getDb().select().from(orderLines).where(eq(orderLines.orderId, preorder.id));
+  assert.match(preorderLines.find((line) => line.productId === box.id)?.label ?? "", /01\/16/);
 
   await assert.rejects(
     () =>
       placeOrder({
         accountId: collector.id,
         kind: "preorder",
-        eventId: kingWest.id,
-        lines: [{ productId: box.id, quantity: 1, regionId: toronto.id }],
+        eventId: sunday.id,
+        lines: [{ productId: box.id, quantity: 16, regionId: toronto.id }],
       }),
     (error: unknown) => error instanceof OrderError && error.code === "stock",
   );
+
+  const nextBox = await placeOrder({
+    accountId: collector.id,
+    kind: "preorder",
+    eventId: sunday.id,
+    lines: [{ productId: box.id, quantity: 1, regionId: toronto.id }],
+  });
+  const [nextLine] = await getDb().select().from(orderLines).where(eq(orderLines.orderId, nextBox.id));
+  assert.match(nextLine?.label ?? "", /02\/16/);
+  await cancelOrder(nextBox.id);
 
   await cancelOrder(preorder.id);
   const again = await placeOrder({
     accountId: collector.id,
     kind: "preorder",
-    eventId: kingWest.id,
+    eventId: sunday.id,
     lines: [{ productId: box.id, quantity: 1, regionId: toronto.id }],
   });
   assert.equal(again.subtotalCents, 28000);
@@ -137,8 +149,8 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   const depositOrder = await placeOrder({
     accountId: collector.id,
     kind: "preorder",
-    eventId: kingWest.id,
-    lines: [{ productId: jar.id, quantity: 2, regionId: toronto.id }],
+    eventId: sunday.id,
+    lines: [{ productId: jar.id, quantity: 2, regionId: toronto.id, strainPosition: 1 }],
   });
   assert.equal(depositOrder.subtotalCents, 16000);
   const partial = await recordDeposit({
@@ -191,29 +203,24 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   assert.equal(wholesale.subtotalCents, 260000 + 3 * 4000);
   assert.equal(wholesale.eventId, null);
 
-  const [reservedBox] = await getDb()
-    .select()
-    .from(inventory)
-    .where(eq(inventory.productId, box.id));
-  const horseshoeBox = (
+  const heldSet = (
     await getDb()
       .select()
       .from(inventory)
       .where(eq(inventory.regionId, horseshoe.id))
-  ).find((row) => row.productId === box.id);
-  assert.equal(horseshoeBox?.reserved, 1);
-  assert.ok(reservedBox);
+  ).find((row) => row.productId === set.id);
+  assert.ok((heldSet?.reserved ?? 0) >= 1);
 
   await cancelOrder(wholesale.id);
   const [released] = (
     await getDb().select().from(inventory).where(eq(inventory.regionId, horseshoe.id))
-  ).filter((row) => row.productId === box.id);
-  assert.equal(released.reserved, 0);
+  ).filter((row) => row.productId === set.id);
+  assert.equal(released?.reserved, (heldSet?.reserved ?? 0) - 1);
 
   const held = await placeOrder({
     accountId: collector.id,
     kind: "preorder",
-    eventId: kingWest.id,
+    eventId: sunday.id,
     lines: [{ productId: box.id, quantity: 1, regionId: toronto.id }],
   });
   await getDb()
@@ -226,7 +233,7 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   const reopened = await placeOrder({
     accountId: collector.id,
     kind: "preorder",
-    eventId: kingWest.id,
+    eventId: sunday.id,
     lines: [{ productId: box.id, quantity: 1, regionId: toronto.id }],
   });
   assert.equal(reopened.status, "awaiting_deposit");
@@ -248,15 +255,15 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
 
   await getDb()
     .insert(waitlistEntries)
-    .values({ eventId: kingWest.id, accountId: collector.id })
+    .values({ eventId: sunday.id, accountId: collector.id })
     .onConflictDoNothing();
   await getDb()
     .insert(waitlistEntries)
-    .values({ eventId: kingWest.id, accountId: collector.id })
+    .values({ eventId: sunday.id, accountId: collector.id })
     .onConflictDoNothing();
   const waiting = await getDb()
     .select()
     .from(waitlistEntries)
-    .where(eq(waitlistEntries.eventId, kingWest.id));
+    .where(eq(waitlistEntries.eventId, sunday.id));
   assert.equal(waiting.length, 1);
 });

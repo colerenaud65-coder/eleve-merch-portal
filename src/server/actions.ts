@@ -11,11 +11,11 @@ import { getDb } from "@/db/index";
 import {
   accessRequests,
   accounts,
+  dropStrains,
   events,
   inventory,
   invitations,
   regions,
-  selectionLineups,
   waitlistEntries,
   wholesaleApplications,
 } from "@/db/schema";
@@ -121,18 +121,24 @@ export async function placePreorder(_prev: { error?: string } | null, formData: 
     if (eventRow.region.slug !== gate.regionSlug) {
       return { error: "This drop is outside the region you entered with." };
     }
-    const lines: { productId: string; quantity: number; regionId: string }[] = [];
-    for (const value of formData.getAll("selection")) {
-      lines.push({ productId: String(value), quantity: 1, regionId: eventRow.region.id });
+    const { products } = await import("@/db/schema");
+    const [box] = await getDb().select().from(products).where(eq(products.slug, "selection-box")).limit(1);
+    const [jar] = await getDb().select().from(products).where(eq(products.slug, "jar-7g")).limit(1);
+    if (!box || !jar) return { error: "The drop catalog is missing." };
+    const lines: { productId: string; quantity: number; regionId: string; strainPosition?: number }[] = [];
+    const boxes = Number(formData.get("boxes") ?? 0);
+    if (boxes > 0) {
+      lines.push({ productId: box.id, quantity: boxes, regionId: eventRow.region.id });
     }
     for (const [key, value] of formData.entries()) {
       if (!key.startsWith("jar:")) continue;
       const quantity = Number(value);
       if (!quantity) continue;
       lines.push({
-        productId: key.slice(4),
+        productId: jar.id,
         quantity,
         regionId: eventRow.region.id,
+        strainPosition: Number(key.slice(4)),
       });
     }
     const order = await placeOrder({
@@ -356,20 +362,25 @@ export async function saveEvent(formData: FormData) {
   const [region] = await getDb()
     .select()
     .from(regions)
-    .where(and(eq(regions.id, regionId), eq(regions.channel, "retail")))
+    .where(and(eq(regions.id, regionId), eq(regions.channel, "retail"), eq(regions.enabled, true)))
     .limit(1);
-  if (!region || !name || !slug || !city || !venue || !summary) return;
+  if (!region || !name || !slug || !summary) return;
+  const { TORONTO_DROP, VANCOUVER_DROP } = await import("@/db/catalog");
+  const lockedVenue = region.slug === "toronto" ? TORONTO_DROP : region.slug === "vancouver" ? VANCOUVER_DROP : null;
+  const cityName = lockedVenue?.city ?? city;
+  const venueName = lockedVenue?.venue ?? venue;
+  if (!cityName || !venueName) return;
   const start = zonedToUtc(startsAt, region.timeZone);
   const end = zonedToUtc(endsAt, region.timeZone);
   const open = zonedToUtc(preorderOpensAt, region.timeZone);
   const close = zonedToUtc(preorderClosesAt, region.timeZone);
   if (![start, end, open, close].every((date) => date && !Number.isNaN(date.getTime()))) return;
-  await getDb().insert(events).values({
+  const created = await getDb().insert(events).values({
     name,
     slug,
     regionId: region.id,
-    city,
-    venue,
+    city: cityName,
+    venue: venueName,
     summary,
     timeZone: region.timeZone,
     startsAt: start!,
@@ -377,7 +388,20 @@ export async function saveEvent(formData: FormData) {
     preorderOpensAt: open!,
     preorderClosesAt: close!,
     complianceConfirmed: false,
-  });
+    boxOnHand: 16,
+  }).returning();
+  if (created[0]) {
+    const { dropStrains } = await import("@/db/schema");
+    for (let position = 1; position <= 4; position += 1) {
+      await getDb().insert(dropStrains).values({
+        eventId: created[0].id,
+        position,
+        name: "",
+        jarOnHand: 0,
+        jarReserved: 0,
+      });
+    }
+  }
   revalidatePath("/admin/events");
   redirect(`/events/${slug}`);
 }
@@ -461,19 +485,24 @@ export async function joinWaitlist(formData: FormData) {
   revalidatePath(`/events/${slug}`);
 }
 
-export async function saveLineups(formData: FormData) {
+export async function saveDrop(formData: FormData) {
   await requireAdmin();
   const eventId = String(formData.get("eventId") ?? "");
+  const boxOnHand = Number(formData.get("boxOnHand") ?? 16);
+  const cancelled = formData.get("cancelled") === "yes";
+  if (!Number.isInteger(boxOnHand) || boxOnHand < 0 || boxOnHand > 16) return;
   const db = getDb();
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith("lineup:")) continue;
-    const lineup = String(value).trim();
+  await db.update(events).set({ boxOnHand, cancelled }).where(eq(events.id, eventId));
+  for (let position = 1; position <= 4; position += 1) {
+    const name = String(formData.get(`strain:${position}`) ?? "").trim();
+    const jarOnHand = Number(formData.get(`jars:${position}`) ?? 0);
+    if (!Number.isInteger(jarOnHand) || jarOnHand < 0) continue;
     await db
-      .insert(selectionLineups)
-      .values({ eventId, productId: key.slice("lineup:".length), lineup })
+      .insert(dropStrains)
+      .values({ eventId, position, name, jarOnHand, jarReserved: 0 })
       .onConflictDoUpdate({
-        target: [selectionLineups.eventId, selectionLineups.productId],
-        set: { lineup },
+        target: [dropStrains.eventId, dropStrains.position],
+        set: { name, jarOnHand },
       });
   }
   revalidatePath("/admin/events");
