@@ -2,7 +2,7 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-import { eq, inArray, notInArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import {
   EDITION_SIZE,
@@ -22,24 +22,16 @@ import { getDb } from "./index";
 import {
   accessRequests,
   accounts,
-  deposits,
   events,
   inventory,
-  orderLines,
-  orders,
   prices,
   products,
   regions,
-  selectionLineups,
   wholesaleApplications,
 } from "./schema";
 
-function resetAllowed() {
-  return (
-    process.env.NODE_ENV !== "production" &&
-    process.env.VERCEL_ENV !== "production" &&
-    process.env.VERCEL_ENV !== "preview"
-  );
+function localPersonas() {
+  return !process.env.VERCEL_ENV;
 }
 
 async function main() {
@@ -47,45 +39,17 @@ async function main() {
   const regionBySlug = new Map<string, string>();
 
   for (const region of regionSeeds) {
-    const [row] = await db
-      .insert(regions)
-      .values(region)
-      .onConflictDoUpdate({
-        target: regions.slug,
-        set: {
-          name: region.name,
-          country: region.country,
-          currency: region.currency,
-          channel: region.channel,
-          minimumAge: region.minimumAge,
-          timeZone: region.timeZone,
-          sortOrder: region.sortOrder,
-        },
-      })
-      .returning();
+    await db.insert(regions).values(region).onConflictDoNothing({ target: regions.slug });
+    const [row] = await db.select().from(regions).where(eq(regions.slug, region.slug)).limit(1);
+    if (!row) throw new Error(`Region ${region.slug} was not seeded.`);
     regionBySlug.set(region.slug, row.id);
   }
 
   const productBySlug = new Map<string, { id: string; kind: string }>();
   for (const product of productSeeds) {
-    const [row] = await db
-      .insert(products)
-      .values(product)
-      .onConflictDoUpdate({
-        target: products.slug,
-        set: {
-          name: product.name,
-          kind: product.kind,
-          editionNumber: product.editionNumber,
-          editionSize: product.editionSize,
-          subtitle: product.subtitle,
-          description: product.description,
-          imagePath: product.imagePath,
-          sortOrder: product.sortOrder,
-          active: true,
-        },
-      })
-      .returning();
+    await db.insert(products).values(product).onConflictDoNothing({ target: products.slug });
+    const [row] = await db.select().from(products).where(eq(products.slug, product.slug)).limit(1);
+    if (!row) throw new Error(`Product ${product.slug} was not seeded.`);
     productBySlug.set(product.slug, { id: row.id, kind: row.kind });
   }
 
@@ -101,9 +65,8 @@ async function main() {
             channel: "retail",
             amountCents,
           })
-          .onConflictDoUpdate({
+          .onConflictDoNothing({
             target: [prices.productId, prices.regionId, prices.channel],
-            set: { amountCents },
           });
       }
     }
@@ -117,9 +80,8 @@ async function main() {
             channel: "retail",
             amountCents,
           })
-          .onConflictDoUpdate({
+          .onConflictDoNothing({
             target: [prices.productId, prices.regionId, prices.channel],
-            set: { amountCents },
           });
       }
       for (const region of regionSeeds.filter((item) => item.channel === "wholesale")) {
@@ -131,9 +93,8 @@ async function main() {
             channel: "wholesale",
             amountCents: WHOLESALE_JAR_CENTS,
           })
-          .onConflictDoUpdate({
+          .onConflictDoNothing({
             target: [prices.productId, prices.regionId, prices.channel],
-            set: { amountCents: WHOLESALE_JAR_CENTS },
           });
       }
     }
@@ -147,32 +108,10 @@ async function main() {
             channel: "wholesale",
             amountCents: WHOLESALE_SET_CENTS,
           })
-          .onConflictDoUpdate({
+          .onConflictDoNothing({
             target: [prices.productId, prices.regionId, prices.channel],
-            set: { amountCents: WHOLESALE_SET_CENTS },
           });
       }
-    }
-  }
-
-  const allowReset = resetAllowed();
-  if (allowReset) {
-    await db.delete(deposits);
-    await db.delete(orderLines);
-    await db.delete(orders);
-  }
-
-  const keep = productSeeds.map((product) => product.slug);
-  const stale = await db.select({ id: products.id }).from(products).where(notInArray(products.slug, keep));
-  if (stale.length > 0) {
-    const ids = stale.map((row) => row.id);
-    if (allowReset) {
-      await db.delete(selectionLineups).where(inArray(selectionLineups.productId, ids));
-      await db.delete(inventory).where(inArray(inventory.productId, ids));
-      await db.delete(prices).where(inArray(prices.productId, ids));
-      await db.delete(products).where(inArray(products.id, ids));
-    } else {
-      await db.update(products).set({ active: false, imagePath: null }).where(inArray(products.id, ids));
     }
   }
 
@@ -188,32 +127,17 @@ async function main() {
           : retail
             ? RETAIL_JAR_ON_HAND
             : WHOLESALE_JAR_ON_HAND;
-      if (allowReset) {
-        await db
-          .insert(inventory)
-          .values({
-            productId: productBySlug.get(product.slug)!.id,
-            regionId: regionBySlug.get(region.slug)!,
-            onHand,
-            reserved: 0,
-          })
-          .onConflictDoUpdate({
-            target: [inventory.productId, inventory.regionId],
-            set: { onHand, reserved: 0 },
-          });
-      } else {
-        await db
-          .insert(inventory)
-          .values({
-            productId: productBySlug.get(product.slug)!.id,
-            regionId: regionBySlug.get(region.slug)!,
-            onHand,
-            reserved: 0,
-          })
-          .onConflictDoNothing({
-            target: [inventory.productId, inventory.regionId],
-          });
-      }
+      await db
+        .insert(inventory)
+        .values({
+          productId: productBySlug.get(product.slug)!.id,
+          regionId: regionBySlug.get(region.slug)!,
+          onHand,
+          reserved: 0,
+        })
+        .onConflictDoNothing({
+          target: [inventory.productId, inventory.regionId],
+        });
     }
   }
 
@@ -234,36 +158,33 @@ async function main() {
       complianceConfirmedAt: event.complianceConfirmed ? new Date(event.preorderOpensAt) : null,
       complianceNote: event.complianceNote,
     };
-    if (allowReset) {
-      await db.insert(events).values(values).onConflictDoUpdate({
-        target: events.slug,
-        set: values,
-      });
-    } else {
-      await db.insert(events).values(values).onConflictDoNothing({ target: events.slug });
-    }
+    await db.insert(events).values(values).onConflictDoNothing({ target: events.slug });
   }
 
-  const adminEmail = (process.env.ADMIN_EMAIL ?? "cole@eleve.select").toLowerCase();
-  await db
-    .insert(accounts)
-    .values({
-      email: adminEmail,
-      name: "Cole",
-      role: "admin",
-      status: "approved",
-      approvedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: accounts.email,
-      set: {
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  if (adminEmail) {
+    const [existingAdmin] = await db.select().from(accounts).where(eq(accounts.email, adminEmail)).limit(1);
+    if (!existingAdmin) {
+      await db.insert(accounts).values({
+        email: adminEmail,
+        name: "Cole",
         role: "admin",
         status: "approved",
         approvedAt: new Date(),
-      },
-    });
+      });
+    } else if (existingAdmin.role !== "admin" || existingAdmin.status !== "approved") {
+      await db
+        .update(accounts)
+        .set({
+          role: "admin",
+          status: "approved",
+          approvedAt: existingAdmin.approvedAt ?? new Date(),
+        })
+        .where(eq(accounts.id, existingAdmin.id));
+    }
+  }
 
-  if (allowReset) {
+  if (localPersonas()) {
     const horseshoe = regionBySlug.get("on-golden-horseshoe")!;
     const demos = [
       {
@@ -302,19 +223,7 @@ async function main() {
 
     for (const demo of demos) {
       if (demo.email === adminEmail) continue;
-      await db
-        .insert(accounts)
-        .values(demo)
-        .onConflictDoUpdate({
-          target: accounts.email,
-          set: {
-            name: demo.name,
-            role: demo.role,
-            status: demo.status,
-            regionId: demo.regionId,
-            approvedAt: demo.approvedAt,
-          },
-        });
+      await db.insert(accounts).values(demo).onConflictDoNothing({ target: accounts.email });
     }
 
     const [applicant] = await db
@@ -323,8 +232,13 @@ async function main() {
       .where(eq(accounts.email, "applicant@eleve.select"))
       .limit(1);
     if (applicant) {
-      await db.delete(wholesaleApplications).where(eq(wholesaleApplications.accountId, applicant.id));
-      await db.insert(wholesaleApplications).values({
+      const [existingApplication] = await db
+        .select({ id: wholesaleApplications.id })
+        .from(wholesaleApplications)
+        .where(eq(wholesaleApplications.accountId, applicant.id))
+        .limit(1);
+      if (!existingApplication) {
+        await db.insert(wholesaleApplications).values({
         accountId: applicant.id,
         businessName: "Harbour Leaf",
         contactName: applicant.name,
@@ -333,7 +247,8 @@ async function main() {
         licenseNumber: "ON-RETAIL-DEMO",
         note: "Requesting the Golden Horseshoe desk.",
         status: "pending",
-      });
+        });
+      }
     }
 
     const [existingRequest] = await db.select({ id: accessRequests.id }).from(accessRequests).limit(1);

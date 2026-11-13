@@ -2,6 +2,11 @@ import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (!process.env.DATABASE_URL && request.nextUrl.pathname !== "/setup") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/setup";
+    return NextResponse.rewrite(url);
+  }
   if (!process.env.CLERK_SECRET_KEY || !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
     return NextResponse.next();
   }

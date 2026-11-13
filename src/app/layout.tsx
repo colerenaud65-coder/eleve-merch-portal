@@ -5,6 +5,7 @@ import { AgeGate } from "@/components/age-gate";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
 import { readGate } from "@/server/gate";
+import { databaseConfigured } from "@/server/setup";
 
 import "./globals.css";
 
@@ -40,6 +41,16 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  if (!databaseConfigured()) {
+    return (
+      <html lang="en" className="h-full">
+        <body className={`${serif.variable} ${sans.variable} min-h-dvh bg-paper font-sans text-ink antialiased`}>
+          {children}
+        </body>
+      </html>
+    );
+  }
+
   const gate = await readGate();
   const body = (
     <body className={`${serif.variable} ${sans.variable} flex min-h-dvh flex-col font-sans antialiased`}>

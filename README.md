@@ -2,7 +2,7 @@
 
 A private collector desk for numbered boxes and 7 g jars. Pop-up preorders and Ontario wholesale live in one Next.js app. Canadian and US stock never share an order.
 
-The previous static site is archived in [`legacy/`](legacy/) and is not served. Product photographs that used to be embedded as base64 now live as files under `legacy/images/` and `public/media/`.
+The previous static site is archived in [`legacy/`](legacy/) and is not served. Product photographs that used to be embedded as base64 now live as files under `legacy/images/`.
 
 ## What Cole does before this can go live
 
@@ -42,16 +42,9 @@ The project on Vercel is `elevestorefront-wiip`. Deploys come from `main`. Do th
 
    Leave `ALLOW_DEV_PREVIEW` unset on Vercel. It is ignored whenever `NODE_ENV` is production or `VERCEL_ENV` is set.
 
-6. **Migrate and seed** once the production `DATABASE_URL` exists:
+6. **Redeploy** after Neon and Clerk are connected. `vercel.json` sets the framework to Next.js and the build runs migrations and the seed when `DATABASE_URL` is present, then `next build`. You do not need a terminal for `db:setup`. The seed only inserts rows that are missing. It does not delete orders, reset stock, or duplicate catalog rows. It creates the admin account from `ADMIN_EMAIL` if that email is not already an admin. If `DATABASE_URL` is missing, the build still succeeds and the site shows a setup screen instead of erroring.
 
-   ```bash
-   vercel env pull .env.local --yes
-   npm run db:setup
-   ```
-
-   `db:setup` applies `drizzle/` and seeds regions, the sixteen boxes, jars, prices, opening inventory, and three sample drops. Re-running the seed in production does not wipe orders or reset stock. Set `ADMIN_EMAIL` before seeding so your admin row exists.
-
-7. **Redeploy** from `main` after the env vars are present. `NEXT_PUBLIC_*` values are baked in at build time.
+   `npm run db:setup` remains available for a local database.
 
 ## Local development
 

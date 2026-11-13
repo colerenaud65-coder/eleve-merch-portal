@@ -246,7 +246,10 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   await cancelOrder(termed.id);
   await getDb().update(accounts).set({ paymentTerms: "deposit" }).where(eq(accounts.id, buyer.id));
 
-  await getDb().insert(waitlistEntries).values({ eventId: kingWest.id, accountId: collector.id });
+  await getDb()
+    .insert(waitlistEntries)
+    .values({ eventId: kingWest.id, accountId: collector.id })
+    .onConflictDoNothing();
   await getDb()
     .insert(waitlistEntries)
     .values({ eventId: kingWest.id, accountId: collector.id })
