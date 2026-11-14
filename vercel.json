@@ -1,7 +1,5 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/menu", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "node scripts/vercel-build.mjs"
 }

@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-eleve-sans), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif: var(--font-eleve-serif), "Times New Roman", Times, serif;
+  --color-paper: #f3f2ef;
+  --color-ink: #121212;
+  --color-mute: #6d6a64;
+  --color-line: #d9d6d0;
+  --color-panel: #e8e6e1;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+::selection {
+  background: #121212;
+  color: #f3f2ef;
+}
+
+:focus-visible {
+  outline: 1px solid #121212;
+  outline-offset: 3px;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  accent-color: #121212;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid #121212;
+  border-radius: 0;
+  padding: 0.8rem 0.85rem;
+  width: 100%;
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  text-decoration: none;
+  min-height: 2.75rem;
+  padding: 0.75rem 1.1rem;
+  background: #121212;
+  color: #f3f2ef;
+  border: 1px solid #121212;
+  border-radius: 0;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+button.secondary,
+.btn.secondary {
+  background: transparent;
+  color: #121212;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
