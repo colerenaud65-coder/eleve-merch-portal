@@ -4,7 +4,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { getDb } from "@/db/index";
-import { accounts, invitations, type Account } from "@/db/schema";
+import { accounts, invitations, regions, type Account } from "@/db/schema";
+import { attachReferral, makeReferralCode } from "@/server/growth";
 
 const DEV_COOKIE = "eleve_dev_session";
 const INVITE_COOKIE = "eleve_invite";
@@ -150,6 +151,7 @@ export async function syncClerkUser(user: ClerkLike): Promise<Account> {
           status,
           regionId: isAdmin ? null : fromInvite?.regionId ?? null,
           approvedAt: status === "approved" ? new Date() : null,
+          referralCode: makeReferralCode(),
         })
         .returning();
       if (fromInvite) {
@@ -157,6 +159,26 @@ export async function syncClerkUser(user: ClerkLike): Promise<Account> {
           .update(invitations)
           .set({ acceptedAt: new Date() })
           .where(eq(invitations.id, fromInvite.id));
+      }
+      const ref = jar.get("eleve_ref")?.value;
+      if (ref) await attachReferral(created.id, ref);
+      const marketing = jar.get("eleve_marketing")?.value;
+      if (marketing?.startsWith("yes:")) {
+        const [, stamp, regionSlug] = marketing.split(":");
+        const at = new Date(Number(stamp));
+        const [region] = regionSlug
+          ? await tx.select({ id: regions.id }).from(regions).where(eq(regions.slug, regionSlug)).limit(1)
+          : [];
+        const [withConsent] = await tx
+          .update(accounts)
+          .set({
+            marketingConsent: true,
+            marketingConsentAt: Number.isNaN(at.getTime()) ? new Date() : at,
+            marketingRegionId: region?.id ?? null,
+          })
+          .where(eq(accounts.id, created.id))
+          .returning();
+        return withConsent ?? created;
       }
       return created;
     }

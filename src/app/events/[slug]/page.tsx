@@ -7,8 +7,9 @@ import { joinWaitlist } from "@/server/actions";
 import { getCurrentAccount } from "@/server/auth";
 import { readGate } from "@/server/gate";
 import { formatMoney } from "@/server/money";
+import { hasEarlyAccess, recordFunnel } from "@/server/growth";
 import { accountOnWaitlist, getDropOffer, getEventBySlug, waitlistForEvent } from "@/server/queries";
-import { formatWhen, preorderPhase } from "@/server/time";
+import { earlyAccessAt, formatWhen, preorderPhase } from "@/server/time";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -23,7 +24,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const gate = await readGate();
   const inRegion = gate?.regionSlug === row.region.slug;
   const account = await getCurrentAccount().catch(() => null);
-  const phase = preorderPhase(row.event);
+  const early = account ? await hasEarlyAccess(account.id, account.role) : false;
+  const phase = preorderPhase(row.event, new Date(), early);
+  if (account) {
+    await recordFunnel({ name: "view_drop", accountId: account.id, eventId: row.event.id });
+  }
   const canSeeMenu =
     inRegion &&
     row.region.enabled &&
@@ -52,6 +57,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         ) : null}
         {phase === "upcoming" ? (
           <Countdown target={row.event.preorderOpensAt.toISOString()} label="Preorders open" />
+        ) : null}
+        {phase === "open" && new Date() < row.event.preorderOpensAt ? (
+          <p className="mt-3 text-sm">Early access is open for you.</p>
+        ) : null}
+        {phase === "upcoming" ? (
+          <p className="mt-3 text-sm text-mute">
+            Past buyers and referrers can order from {formatWhen(earlyAccessAt(row.event), row.event.timeZone)}.
+          </p>
         ) : null}
         {phase === "compliance" ? (
           <p className="border border-ink p-4 text-sm">

@@ -70,16 +70,40 @@ export function ageInZone(dob: string, timeZone: string, now = new Date()) {
 
 export type PreorderPhase = "compliance" | "upcoming" | "open" | "closed";
 
+export function earlyAccessAt(event: { earlyAccessOpensAt?: Date | null; preorderOpensAt: Date }) {
+  return event.earlyAccessOpensAt ?? new Date(event.preorderOpensAt.getTime() - 3 * 60 * 60 * 1000);
+}
+
 export function preorderPhase(
   event: {
     complianceConfirmed: boolean;
     preorderOpensAt: Date;
     preorderClosesAt: Date;
+    earlyAccessOpensAt?: Date | null;
   },
   now = new Date(),
+  early = false,
 ): PreorderPhase {
   if (!event.complianceConfirmed) return "compliance";
-  if (now < event.preorderOpensAt) return "upcoming";
   if (now >= event.preorderClosesAt) return "closed";
-  return "open";
+  if (now >= event.preorderOpensAt) return "open";
+  if (early && now >= earlyAccessAt(event)) return "open";
+  return "upcoming";
+}
+
+export function formatLocalInput(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date);
+  const part = Object.fromEntries(
+    parts.filter((item) => item.type !== "literal").map((item) => [item.type, item.value]),
+  );
+  const hour = part.hour === "24" ? "00" : part.hour;
+  return `${part.year}-${part.month}-${part.day}T${hour}:${part.minute}`;
 }

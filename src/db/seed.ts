@@ -2,7 +2,7 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import {
   RETAIL_BOX_CENTS,
@@ -30,6 +30,7 @@ import {
   waitlistEntries,
   wholesaleApplications,
 } from "./schema";
+import { makeReferralCode } from "../server/growth";
 import { zonedLocalToUtc } from "../server/time";
 
 function localPersonas() {
@@ -392,6 +393,17 @@ async function main() {
         note: "Asked to be added for the King West drop.",
       });
     }
+  }
+
+  await db.execute(
+    sql`update events set early_access_opens_at = preorder_opens_at - interval '3 hours' where early_access_opens_at is null`,
+  );
+  const missingCodes = await db.select({ id: accounts.id }).from(accounts).where(isNull(accounts.referralCode));
+  for (const account of missingCodes) {
+    await db
+      .update(accounts)
+      .set({ referralCode: makeReferralCode() })
+      .where(and(eq(accounts.id, account.id), isNull(accounts.referralCode)));
   }
 
   console.log("Seeded Élevé Select.");

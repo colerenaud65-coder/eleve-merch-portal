@@ -396,6 +396,7 @@ export async function saveEvent(formData: FormData) {
     endsAt: end!,
     preorderOpensAt: open!,
     preorderClosesAt: close!,
+    earlyAccessOpensAt: new Date(open!.getTime() - 3 * 60 * 60 * 1000),
     complianceConfirmed: false,
     boxOnHand: 16,
   }).returning();
@@ -480,6 +481,45 @@ export async function adminOrderStatus(formData: FormData) {
   revalidatePath(`/orders/${orderId}`);
 }
 
+export async function setMarketingConsent(formData: FormData) {
+  const account = await requireAccount();
+  const yes = formData.get("consent") === "yes";
+  const gate = await readGate();
+  let marketingRegionId = account.marketingRegionId;
+  if (yes && gate) {
+    const { getRegionBySlug } = await import("@/server/queries");
+    const region = await getRegionBySlug(gate.regionSlug);
+    if (region) marketingRegionId = region.id;
+  }
+  await getDb()
+    .update(accounts)
+    .set({
+      marketingConsent: yes,
+      marketingConsentAt: yes ? new Date() : null,
+      marketingRegionId,
+    })
+    .where(eq(accounts.id, account.id));
+  revalidatePath("/account");
+}
+
+export async function rememberMarketingConsent(formData: FormData) {
+  const { cookies } = await import("next/headers");
+  const jar = await cookies();
+  const gate = await readGate();
+  if (formData.get("consent") === "yes") {
+    jar.set("eleve_marketing", `yes:${Date.now()}:${gate?.regionSlug ?? ""}`, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 14,
+    });
+  } else {
+    jar.delete("eleve_marketing");
+  }
+  redirect("/sign-up");
+}
+
 export async function joinWaitlist(formData: FormData) {
   const account = await requireAccount();
   if (account.status !== "approved") return;
@@ -501,7 +541,11 @@ export async function saveDrop(formData: FormData) {
   const cancelled = formData.get("cancelled") === "yes";
   if (!Number.isInteger(boxOnHand) || boxOnHand < 0 || boxOnHand > 16) return;
   const db = getDb();
-  await db.update(events).set({ boxOnHand, cancelled }).where(eq(events.id, eventId));
+  const [current] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+  const earlyRaw = String(formData.get("earlyAccessOpensAt") ?? "");
+  const earlyAccessOpensAt =
+    earlyRaw && current ? zonedToUtc(earlyRaw, current.timeZone) ?? current.earlyAccessOpensAt : current?.earlyAccessOpensAt;
+  await db.update(events).set({ boxOnHand, cancelled, earlyAccessOpensAt }).where(eq(events.id, eventId));
   for (let position = 1; position <= 4; position += 1) {
     const name = String(formData.get(`strain:${position}`) ?? "").trim();
     const jarOnHand = Number(formData.get(`jars:${position}`) ?? 0);

@@ -4,7 +4,7 @@ import { getDb } from "@/db/index";
 import { dropStrains } from "@/db/schema";
 import { saveDrop, saveEvent, saveInventory, setCompliance } from "@/server/actions";
 import { listAllEvents, listInventory, listRetailRegions, listWholesaleRegions } from "@/server/queries";
-import { formatWhen, preorderPhase } from "@/server/time";
+import { formatLocalInput, formatWhen, preorderPhase } from "@/server/time";
 
 export const metadata = { title: "Drops" };
 
@@ -52,6 +52,17 @@ export default async function AdminEventsPage() {
                   <label>
                     Box quantity
                     <input name="boxOnHand" type="number" min={event.boxReserved} max={16} defaultValue={event.boxOnHand} />
+                  </label>
+                  <label>
+                    Early access opens
+                    <input
+                      name="earlyAccessOpensAt"
+                      type="datetime-local"
+                      defaultValue={formatLocalInput(
+                        event.earlyAccessOpensAt ?? new Date(event.preorderOpensAt.getTime() - 3 * 60 * 60 * 1000),
+                        event.timeZone,
+                      )}
+                    />
                   </label>
                   {[1, 2, 3, 4].map((position) => {
                     const strain = strainRows.find((row) => row.eventId === event.id && row.position === position);

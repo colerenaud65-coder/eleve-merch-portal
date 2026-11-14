@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Outfit } from "next/font/google";
 
@@ -46,6 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <html lang="en" className="h-full">
         <body className={`${serif.variable} ${sans.variable} min-h-dvh bg-paper font-sans text-ink antialiased`}>
           {children}
+          <Analytics />
         </body>
       </html>
     );
@@ -63,6 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       ) : (
         <AgeGate />
       )}
+      <Analytics />
     </body>
   );
 

@@ -5,6 +5,7 @@ import { PreorderForm } from "@/components/preorder-form";
 import { SELECTION_SPEC } from "@/db/catalog";
 import { getCurrentAccount } from "@/server/auth";
 import { readGate } from "@/server/gate";
+import { hasEarlyAccess, recordFunnel } from "@/server/growth";
 import { getDropOffer, getEventBySlug } from "@/server/queries";
 import { preorderPhase } from "@/server/time";
 
@@ -21,7 +22,9 @@ export default async function PreorderPage({ params }: { params: Promise<{ slug:
   if (account.status !== "approved" || (account.role !== "popup_customer" && account.role !== "admin")) {
     redirect(`/events/${slug}`);
   }
-  if (preorderPhase(row.event) !== "open") redirect(`/events/${slug}`);
+  const early = await hasEarlyAccess(account.id, account.role);
+  if (preorderPhase(row.event, new Date(), early) !== "open") redirect(`/events/${slug}`);
+  await recordFunnel({ name: "start_preorder", accountId: account.id, eventId: row.event.id });
 
   const offer = await getDropOffer(row.event.id, row.region.id);
   const strains = offer.strains

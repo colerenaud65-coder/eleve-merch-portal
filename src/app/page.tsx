@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { Countdown } from "@/components/countdown";
@@ -16,7 +17,17 @@ export default async function HomePage() {
       <section className="mx-auto grid max-w-6xl gap-10 px-5 py-14 sm:py-20">
         <div>
           <p className="text-[11px] uppercase tracking-[0.42em]">Select</p>
-          <h1 className="mt-3 font-serif text-[22vw] leading-[0.78] sm:text-[9.5rem]">Élevé</h1>
+          <h1 className="mt-3">
+            <Image
+              src="/brand/wordmark-black.png"
+              alt="Élevé"
+              width={1323}
+              height={567}
+              priority
+              sizes="(min-width: 640px) 560px, 90vw"
+              className="h-[22vw] w-auto max-w-full sm:h-[9.5rem]"
+            />
+          </h1>
           <p className="mt-6 max-w-md text-sm leading-relaxed text-mute">
             A 4-strain box, 7 g of each strain, and 7 g jars of those same strains. Released at a
             pop-up, not shipped from a cart. Cole opens the menu after you ask.

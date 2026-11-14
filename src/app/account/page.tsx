@@ -2,9 +2,12 @@ import Link from "next/link";
 
 import { SignOut } from "@/components/sign-out";
 import { roleLabel, orderStatusLabel, termsLabel } from "@/lib/labels";
+import { setMarketingConsent } from "@/server/actions";
 import { clerkConfigured, getCurrentAccount } from "@/server/auth";
+import { boxEdition, collectorBoxes, ensureReferralCode, referralCount } from "@/server/growth";
 import { formatMoney } from "@/server/money";
 import { accountApplication, listOrdersForAccount } from "@/server/queries";
+import { formatWhen } from "@/server/time";
 import { redirect } from "next/navigation";
 
 export const metadata = { title: "Account", robots: { index: false } };
@@ -14,6 +17,10 @@ export default async function AccountPage() {
   if (!account) redirect("/sign-in");
   const orders = account.status === "approved" ? await listOrdersForAccount(account.id) : [];
   const application = await accountApplication(account.id);
+  const code = await ensureReferralCode(account.id);
+  const referrals = await referralCount(account.id);
+  const boxes = await collectorBoxes(account.id);
+  const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
 
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
@@ -55,6 +62,42 @@ export default async function AccountPage() {
           Wholesale application for {application.region.name}: {application.application.status}.
         </p>
       ) : null}
+
+      <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Referral</h2>
+      <p className="mt-4 text-sm">
+        Code {code}. {referrals} {referrals === 1 ? "signup" : "signups"}. Early access to the next drop, not a discount.
+      </p>
+      <p className="mt-2 text-sm">
+        {origin}/r/{code}
+      </p>
+
+      <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Collector</h2>
+      {boxes.length === 0 ? (
+        <p className="mt-4 text-sm text-mute">No numbered boxes yet.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-ink border-y border-ink">
+          {boxes.map((box) => (
+            <li key={`${box.drop}-${box.number}`} className="flex flex-wrap items-baseline justify-between gap-3 py-3 text-sm">
+              <span>{box.drop}</span>
+              <span>
+                {boxEdition(box.number)} · {formatWhen(box.startsAt, box.timeZone)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Updates</h2>
+      <form action={setMarketingConsent} className="mt-4 space-y-3">
+        <label className="flex items-start gap-2 normal-case tracking-normal">
+          <input type="checkbox" name="consent" value="yes" defaultChecked={account.marketingConsent} style={{ width: "1rem", height: "1rem" }} />
+          <span>Email me when a drop opens. Off until you check this. You can turn it off here.</span>
+        </label>
+        {account.marketingConsentAt ? (
+          <p className="text-sm text-mute">Consent recorded {formatWhen(account.marketingConsentAt, "America/Toronto")}.</p>
+        ) : null}
+        <button type="submit">Save</button>
+      </form>
 
       <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Orders</h2>
       {orders.length === 0 ? (

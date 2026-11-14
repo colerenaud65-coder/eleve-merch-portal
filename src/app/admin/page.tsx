@@ -1,17 +1,27 @@
 import Link from "next/link";
 
 import { orderStatusLabel } from "@/lib/labels";
+import { funnelCounts } from "@/server/growth";
 import { formatMoney } from "@/server/money";
-import { adminSnapshot, listAllEvents, listAllOrders } from "@/server/queries";
+import { adminSnapshot, listAllEvents, listAllOrders, listRetailRegions } from "@/server/queries";
 
 export const metadata = { title: "Admin" };
 
 export default async function AdminHome() {
-  const [snapshot, events, orders] = await Promise.all([
+  const [snapshot, events, orders, funnel, retail] = await Promise.all([
     adminSnapshot(),
     listAllEvents(),
     listAllOrders(),
+    funnelCounts(),
+    listRetailRegions(),
   ]);
+  const funnelLabel: Record<string, string> = {
+    view_drop: "View drop",
+    start_preorder: "Start preorder",
+    preorder_placed: "Preorder placed",
+    deposit_paid: "Deposit paid",
+    picked_up: "Picked up",
+  };
   const cards = [
     [snapshot.pendingAccounts, "Accounts waiting", "/admin/approvals"],
     [snapshot.openApplications, "Wholesale applications", "/admin/approvals"],
@@ -30,6 +40,24 @@ export default async function AdminHome() {
           </Link>
         ))}
       </div>
+      <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Funnel</h2>
+      <ul className="mt-4 divide-y divide-ink border-y border-ink text-sm">
+        {funnel.map((step) => (
+          <li key={step.name} className="flex justify-between py-3">
+            <span>{funnelLabel[step.name]}</span>
+            <span>{step.total}</span>
+          </li>
+        ))}
+      </ul>
+      <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Consented contacts</h2>
+      <p className="mt-4 flex flex-wrap gap-4 text-[11px] uppercase tracking-[0.14em]">
+        <a href="/admin/contacts">All regions</a>
+        {retail.map((region) => (
+          <a key={region.id} href={`/admin/contacts?region=${region.slug}`}>
+            {region.name}
+          </a>
+        ))}
+      </p>
       <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Orders by drop</h2>
       <div className="mt-4 divide-y divide-ink border-y border-ink">
         {events.map(({ event, region }) => {

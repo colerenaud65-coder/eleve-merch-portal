@@ -323,7 +323,7 @@ export async function placeOrder(input: {
   }
   const requestedRegionId = [...regionIds][0];
 
-  return getDb().transaction(async (tx) => {
+  const order = await getDb().transaction(async (tx) => {
     const [account] = await tx
       .select()
       .from(accounts)
@@ -351,8 +351,16 @@ export async function placeOrder(input: {
         );
       }
       const now = new Date();
-      if (now < event.preorderOpensAt || now >= event.preorderClosesAt) {
+      if (now >= event.preorderClosesAt) {
         throw new OrderError("Preorders are not open for this drop.", "window");
+      }
+      if (now < event.preorderOpensAt) {
+        const { earlyAccessAt } = await import("@/server/time");
+        const { hasEarlyAccess } = await import("@/server/growth");
+        const earlyAt = earlyAccessAt(event);
+        if (now < earlyAt || !(await hasEarlyAccess(account.id, account.role))) {
+          throw new OrderError("Preorders are not open for this drop.", "window");
+        }
       }
       if (event.regionId !== requestedRegionId) {
         throw new OrderError(MIXED, "mixed_region");
@@ -499,6 +507,16 @@ export async function placeOrder(input: {
 
     return order;
   });
+  if (order.kind === "preorder" && order.eventId) {
+    const { recordFunnel } = await import("@/server/growth");
+    await recordFunnel({
+      name: "preorder_placed",
+      accountId: order.accountId,
+      eventId: order.eventId,
+      orderId: order.id,
+    });
+  }
+  return order;
 }
 
 async function linesFor(tx: Tx, orderId: string) {
@@ -585,7 +603,7 @@ export async function recordDeposit(input: {
     throw new OrderError("Enter the amount that arrived.", "deposit");
   }
   const { deposits } = await import("@/db/schema");
-  return getDb().transaction(async (tx) => {
+  const result = await getDb().transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, input.orderId)).for("update");
     if (!order) throw new OrderError("Order not found.", "order");
     if (order.status === "cancelled" || order.status === "completed") {
@@ -619,8 +637,23 @@ export async function recordDeposit(input: {
       .set({ depositReceivedCents, balanceCents, status, holdExpiresAt })
       .where(eq(orders.id, order.id))
       .returning();
-    return updated;
+    return {
+      updated,
+      paid: updated.status === "deposit_received" && order.status !== "deposit_received",
+      eventId: order.eventId,
+      accountId: order.accountId,
+    };
   });
+  if (result.paid) {
+    const { recordFunnel } = await import("@/server/growth");
+    await recordFunnel({
+      name: "deposit_paid",
+      accountId: result.accountId,
+      eventId: result.eventId,
+      orderId: result.updated.id,
+    });
+  }
+  return result.updated;
 }
 
 export async function markReady(orderId: string) {
@@ -644,7 +677,7 @@ export async function markReady(orderId: string) {
 }
 
 export async function completeOrder(orderId: string) {
-  return getDb().transaction(async (tx) => {
+  const closed = await getDb().transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
     if (!order) throw new OrderError("Order not found.", "order");
     if (
@@ -701,6 +734,16 @@ export async function completeOrder(orderId: string) {
       .set({ status: "completed", checkedInAt: order.checkedInAt ?? new Date() })
       .where(eq(orders.id, order.id))
       .returning();
-    return updated;
+    return { updated, eventId: order.eventId, accountId: order.accountId };
   });
+  if (closed.eventId) {
+    const { recordFunnel } = await import("@/server/growth");
+    await recordFunnel({
+      name: "picked_up",
+      accountId: closed.accountId,
+      eventId: closed.eventId,
+      orderId: closed.updated.id,
+    });
+  }
+  return closed.updated;
 }

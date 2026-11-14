@@ -74,8 +74,27 @@ export const accounts = pgTable("accounts", {
   regionId: uuid("region_id").references(() => regions.id),
   paymentTerms: text("payment_terms").notNull().default("deposit"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
+  referralCode: text("referral_code").unique(),
+  marketingConsent: boolean("marketing_consent").notNull().default(false),
+  marketingConsentAt: timestamp("marketing_consent_at", { withTimezone: true }),
+  marketingRegionId: uuid("marketing_region_id").references(() => regions.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    referrerId: uuid("referrer_id")
+      .notNull()
+      .references(() => accounts.id),
+    referredId: uuid("referred_id")
+      .notNull()
+      .references(() => accounts.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("referrals_referred").on(table.referredId)],
+);
 
 export const invitations = pgTable("invitations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -134,6 +153,7 @@ export const events = pgTable("events", {
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
   preorderOpensAt: timestamp("preorder_opens_at", { withTimezone: true }).notNull(),
   preorderClosesAt: timestamp("preorder_closes_at", { withTimezone: true }).notNull(),
+  earlyAccessOpensAt: timestamp("early_access_opens_at", { withTimezone: true }),
   complianceConfirmed: boolean("compliance_confirmed").notNull().default(false),
   complianceConfirmedAt: timestamp("compliance_confirmed_at", { withTimezone: true }),
   complianceNote: text("compliance_note"),
@@ -280,6 +300,19 @@ export const boxAllocations = pgTable(
     number: integer("number").notNull(),
   },
   (table) => [unique("box_allocations_event_number").on(table.eventId, table.number)],
+);
+
+export const funnelEvents = pgTable(
+  "funnel_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    accountId: uuid("account_id").references(() => accounts.id),
+    eventId: uuid("event_id").references(() => events.id),
+    orderId: uuid("order_id").references(() => orders.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("funnel_events_step").on(table.accountId, table.eventId, table.name)],
 );
 
 export const orderLines = pgTable("order_lines", {
