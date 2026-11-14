@@ -2,14 +2,20 @@ import { asc } from "drizzle-orm";
 
 import { getDb } from "@/db/index";
 import { dropStrains } from "@/db/schema";
-import { saveDrop, saveEvent, setCompliance } from "@/server/actions";
-import { listAllEvents, listRetailRegions } from "@/server/queries";
+import { saveDrop, saveEvent, saveInventory, setCompliance } from "@/server/actions";
+import { listAllEvents, listInventory, listRetailRegions, listWholesaleRegions } from "@/server/queries";
 import { formatWhen, preorderPhase } from "@/server/time";
 
 export const metadata = { title: "Drops" };
 
 export default async function AdminEventsPage() {
-  const [rows, retail] = await Promise.all([listAllEvents(), listRetailRegions()]);
+  const [rows, retail, wholesale, stock] = await Promise.all([
+    listAllEvents(),
+    listRetailRegions(),
+    listWholesaleRegions(),
+    listInventory(),
+  ]);
+  const wholesaleStock = stock.filter((row) => wholesale.some((region) => region.id === row.region.id));
   const strainRows = await getDb().select().from(dropStrains).orderBy(asc(dropStrains.position));
 
   return (
@@ -138,6 +144,40 @@ export default async function AdminEventsPage() {
           <button type="submit">Create drop</button>
         </form>
       </section>
+      {wholesaleStock.length > 0 ? (
+        <section>
+          <h2 className="text-[11px] uppercase tracking-[0.2em]">Wholesale stock</h2>
+          <p className="mt-2 text-sm text-mute">Pop-up boxes and jars are set on each drop above.</p>
+          <form action={saveInventory} className="mt-4">
+            <div className="divide-y divide-ink border-y border-ink">
+              {wholesaleStock.map((row) => (
+                <div key={row.inventory.id} className="grid items-center gap-3 py-3 sm:grid-cols-[1fr_8rem]">
+                  <div>
+                    <p className="text-sm">
+                      {row.region.name} · {row.product.name}
+                    </p>
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-mute">
+                      Reserved {row.inventory.reserved}
+                    </p>
+                  </div>
+                  <label className="normal-case tracking-normal">
+                    <span className="sr-only">On hand for {row.product.name}</span>
+                    <input
+                      name={`onHand:${row.inventory.id}`}
+                      type="number"
+                      min={row.inventory.reserved}
+                      defaultValue={row.inventory.onHand}
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+            <button type="submit" className="mt-6">
+              Save counts
+            </button>
+          </form>
+        </section>
+      ) : null}
     </main>
   );
 }

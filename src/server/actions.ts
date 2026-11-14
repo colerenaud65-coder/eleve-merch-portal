@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { retailRegions } from "@/db/catalog";
+import { customerRetailRegions, retailRegions } from "@/db/catalog";
 import { getDb } from "@/db/index";
 import {
   accessRequests,
@@ -20,7 +20,7 @@ import {
   wholesaleApplications,
 } from "@/db/schema";
 import { clearDevSession, devPreviewEnabled, getCurrentAccount, setDevSession } from "@/server/auth";
-import { clearGate, readGate, writeGate } from "@/server/gate";
+import { readGate, writeGate } from "@/server/gate";
 import { dollarsToCents } from "@/server/money";
 import { OrderError, cancelOrder, completeOrder, markReady, placeOrder, recordDeposit } from "@/server/orders";
 import { getEventBySlug, getOrderByPickupToken } from "@/server/queries";
@@ -66,8 +66,17 @@ export async function confirmAge(_prev: { error?: string } | null, formData: For
   redirect("/");
 }
 
-export async function changeRegion() {
-  await clearGate();
+export async function changeRegion(formData: FormData) {
+  const regionSlug = String(formData.get("region") ?? "");
+  const region = customerRetailRegions.find((item) => item.slug === regionSlug);
+  if (!region) redirect("/");
+  const existing = await readGate();
+  await writeGate({
+    regionSlug: region.slug,
+    country: region.country,
+    dob: existing?.dob ?? "",
+    confirmedAt: existing?.confirmedAt || new Date().toISOString(),
+  });
   redirect("/");
 }
 
@@ -434,7 +443,7 @@ export async function saveInventory(formData: FormData) {
     if (!Number.isInteger(onHand) || onHand < row.reserved) continue;
     await db.update(inventory).set({ onHand }).where(eq(inventory.id, row.id));
   }
-  revalidatePath("/admin/inventory");
+  revalidatePath("/admin/events");
 }
 
 export async function adminRecordDeposit(formData: FormData) {

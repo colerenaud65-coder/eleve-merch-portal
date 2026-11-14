@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { customerRetailRegions } from "@/db/catalog";
+import { getCurrentAccount } from "@/server/auth";
 
 const COOKIE = "eleve_gate";
 
@@ -28,7 +29,7 @@ function verify(raw: string, secret: string): Gate | null {
   if (left.length !== right.length || !timingSafeEqual(left, right)) return null;
   try {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Gate;
-    if (!parsed.regionSlug || !parsed.dob || (parsed.country !== "CA" && parsed.country !== "US")) {
+    if (!parsed.regionSlug || typeof parsed.dob !== "string" || (parsed.country !== "CA" && parsed.country !== "US")) {
       return null;
     }
     return parsed;
@@ -39,15 +40,30 @@ function verify(raw: string, secret: string): Gate | null {
 
 export async function readGate(): Promise<(Gate & { regionName: string; minimumAge: number }) | null> {
   const secret = process.env.APP_SECRET;
-  if (!secret) return null;
-  const jar = await cookies();
-  const raw = jar.get(COOKIE)?.value;
-  if (!raw) return null;
-  const gate = verify(raw, secret);
-  if (!gate) return null;
-  const region = customerRetailRegions.find((item) => item.slug === gate.regionSlug);
-  if (!region || region.country !== gate.country) return null;
-  return { ...gate, regionName: region.name, minimumAge: region.minimumAge };
+  const raw = secret ? (await cookies()).get(COOKIE)?.value : undefined;
+  const gate = secret && raw ? verify(raw, secret) : null;
+  if (gate) {
+    const region = customerRetailRegions.find((item) => item.slug === gate.regionSlug);
+    if (region && region.country === gate.country) {
+      return { ...gate, regionName: region.name, minimumAge: region.minimumAge };
+    }
+  }
+  return signedInRegion();
+}
+
+async function signedInRegion() {
+  const account = await getCurrentAccount().catch(() => null);
+  if (!account) return null;
+  const region = customerRetailRegions[0];
+  if (!region) return null;
+  return {
+    regionSlug: region.slug,
+    country: region.country,
+    dob: "",
+    confirmedAt: "",
+    regionName: region.name,
+    minimumAge: region.minimumAge,
+  };
 }
 
 export async function writeGate(gate: Gate) {
