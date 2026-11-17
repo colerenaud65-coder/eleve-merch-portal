@@ -11,6 +11,10 @@ export default async function SignInPage() {
     return (
       <main className="mx-auto flex max-w-6xl justify-center px-5 py-12">
         <SignIn
+          routing="path"
+          path="/sign-in"
+          signUpUrl="/sign-up"
+          fallbackRedirectUrl="/account"
           appearance={{
             variables: {
               colorPrimary: "#121212",

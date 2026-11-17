@@ -43,6 +43,10 @@ export default async function SignUpPage() {
         </button>
       </form>
       <SignUp
+        routing="path"
+        path="/sign-up"
+        signInUrl="/sign-in"
+        fallbackRedirectUrl="/account"
         appearance={{
           variables: {
             colorPrimary: "#121212",

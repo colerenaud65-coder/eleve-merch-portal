@@ -2,8 +2,8 @@ import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Outfit } from "next/font/google";
 
-import { AgeGate } from "@/components/age-gate";
 import { Footer } from "@/components/footer";
+import { GateFrame } from "@/components/gate-frame";
 import { Header } from "@/components/header";
 import { readGate } from "@/server/gate";
 import { databaseConfigured } from "@/server/setup";
@@ -56,15 +56,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const gate = await readGate();
   const body = (
     <body className={`${serif.variable} ${sans.variable} flex min-h-dvh flex-col font-sans antialiased`}>
-      {gate ? (
-        <>
-          <Header gate={gate} />
-          <div className="flex-1">{children}</div>
-          <Footer />
-        </>
-      ) : (
-        <AgeGate />
-      )}
+      <GateFrame hasGate={Boolean(gate)} header={gate ? <Header gate={gate} /> : null} footer={gate ? <Footer /> : null}>
+        {children}
+      </GateFrame>
       <Analytics />
     </body>
   );
@@ -79,7 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   const { ClerkProvider } = await import("@clerk/nextjs");
   return (
-    <ClerkProvider>
+    <ClerkProvider proxyUrl="/__clerk" signInUrl="/sign-in" signUpUrl="/sign-up">
       <html lang="en" className="h-full">
         {body}
       </html>
