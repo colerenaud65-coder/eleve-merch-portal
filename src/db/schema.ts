@@ -69,6 +69,9 @@ export const regions = pgTable("regions", {
   timeZone: text("time_zone").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
   enabled: boolean("enabled").notNull().default(true),
+  venue: text("venue"),
+  address: text("address"),
+  hours: text("hours"),
 });
 
 export const accounts = pgTable("accounts", {
@@ -375,6 +378,11 @@ export const redemptions = pgTable("redemptions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+});
+
+export const dataResets = pgTable("data_resets", {
+  name: text("name").primaryKey(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const pointsLedger = pgTable("points_ledger", {

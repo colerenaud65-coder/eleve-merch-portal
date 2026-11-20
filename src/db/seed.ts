@@ -2,13 +2,13 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import {
   RETAIL_BOX_CENTS,
   RETAIL_JAR_CENTS,
-  TORONTO_DROP,
-  VANCOUVER_DROP,
+  TORONTO_PLACE,
+  VANCOUVER_PLACE,
   WHOLESALE_JAR_CENTS,
   WHOLESALE_JAR_ON_HAND,
   WHOLESALE_SET_CENTS,
@@ -16,26 +16,8 @@ import {
   regionSeeds,
 } from "./catalog";
 import { getDb } from "./index";
-import {
-  accessRequests,
-  accounts,
-  dropStrains,
-  events,
-  inventory,
-  orders,
-  prices,
-  products,
-  regions,
-  selectionLineups,
-  waitlistEntries,
-  wholesaleApplications,
-} from "./schema";
+import { accounts, inventory, prices, products, regions } from "./schema";
 import { makeReferralCode } from "../server/growth";
-import { zonedLocalToUtc } from "../server/time";
-
-function localPersonas() {
-  return !process.env.VERCEL_ENV;
-}
 
 async function main() {
   const db = getDb();
@@ -147,150 +129,26 @@ async function main() {
   }
 
   await db.update(regions).set({ enabled: false }).where(eq(regions.slug, "united-states"));
-  await db.update(regions).set({ enabled: true }).where(eq(regions.slug, "toronto"));
-  await db.update(regions).set({ enabled: true }).where(eq(regions.slug, "vancouver"));
-
-  async function retireEvent(slug: string) {
-    const [event] = await db.select().from(events).where(eq(events.slug, slug)).limit(1);
-    if (!event) return;
-    const [order] = await db.select({ id: orders.id }).from(orders).where(eq(orders.eventId, event.id)).limit(1);
-    if (order) {
-      await db.update(events).set({ cancelled: true }).where(eq(events.id, event.id));
-      return;
-    }
-    await db.delete(waitlistEntries).where(eq(waitlistEntries.eventId, event.id));
-    await db.delete(selectionLineups).where(eq(selectionLineups.eventId, event.id));
-    await db.delete(dropStrains).where(eq(dropStrains.eventId, event.id));
-    await db.delete(events).where(eq(events.id, event.id));
-  }
-
-  await retireEvent("toronto-king-west");
-  await retireEvent("vancouver-railtown");
-  await retireEvent("los-angeles-arts-district");
-
-  const sundays: string[] = [];
-  const cursor = new Date();
-  for (let day = 0; day < 70 && sundays.length < 8; day += 1) {
-    const date = new Date(cursor.getTime() + day * 24 * 60 * 60 * 1000);
-    const weekday = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Toronto",
-      weekday: "short",
-    }).format(date);
-    if (weekday !== "Sun") continue;
-    sundays.push(
-      new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/Toronto",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(date),
-    );
-  }
-
-  const torontoId = regionBySlug.get("toronto")!;
-  for (const [index, date] of sundays.entries()) {
-    const slug = `sunday-service-${date}`;
-    const startsAt = zonedLocalToUtc(`${date}T12:00`, "America/Toronto");
-    const endsAt = zonedLocalToUtc(`${date}T18:00`, "America/Toronto");
-    const preorderOpensAt = new Date(startsAt.getTime() - 6 * 24 * 60 * 60 * 1000);
-    const inserted = await db
-      .insert(events)
-      .values({
-        slug,
-        name: TORONTO_DROP.name,
-        regionId: torontoId,
-        venue: TORONTO_DROP.venue,
-        city: TORONTO_DROP.city,
-        summary: TORONTO_DROP.summary,
-        timeZone: "America/Toronto",
-        startsAt,
-        endsAt,
-        preorderOpensAt,
-        preorderClosesAt: startsAt,
-        complianceConfirmed: index === 0,
-        complianceConfirmedAt: index === 0 ? new Date() : null,
-        complianceNote: index === 0 ? "Sunday Service is confirmed." : null,
-        boxOnHand: 16,
-        boxReserved: 0,
-      })
-      .onConflictDoNothing({ target: events.slug })
-      .returning();
-    await db
-      .update(events)
-      .set({
-        name: TORONTO_DROP.name,
-        venue: TORONTO_DROP.venue,
-        city: TORONTO_DROP.city,
-        summary: TORONTO_DROP.summary,
-        timeZone: "America/Toronto",
-      })
-      .where(eq(events.slug, slug));
-    const [event] = await db.select().from(events).where(eq(events.slug, slug)).limit(1);
-    if (!event) continue;
-    for (let position = 1; position <= 4; position += 1) {
-      await db
-        .insert(dropStrains)
-        .values({
-          eventId: event.id,
-          position,
-          name: "",
-          jarOnHand: 12,
-          jarReserved: 0,
-        })
-        .onConflictDoNothing({ target: [dropStrains.eventId, dropStrains.position] });
-    }
-    void inserted;
-  }
-
-  const vancouverId = regionBySlug.get("vancouver")!;
-  const dankDate = sundays[2] ?? sundays[0];
-  const dankStart = zonedLocalToUtc(`${dankDate}T14:00`, "America/Vancouver");
-  const dankEnd = zonedLocalToUtc(`${dankDate}T20:00`, "America/Vancouver");
-  const dankInserted = await db
-    .insert(events)
-    .values({
-      slug: "dank-club",
-      name: VANCOUVER_DROP.name,
-      regionId: vancouverId,
-      venue: VANCOUVER_DROP.venue,
-      city: VANCOUVER_DROP.city,
-      summary: VANCOUVER_DROP.summary,
-      timeZone: "America/Vancouver",
-      startsAt: dankStart,
-      endsAt: dankEnd,
-      preorderOpensAt: new Date(dankStart.getTime() - 7 * 24 * 60 * 60 * 1000),
-      preorderClosesAt: dankStart,
-      complianceConfirmed: false,
-      boxOnHand: 16,
-    })
-    .onConflictDoNothing({ target: events.slug })
-    .returning();
   await db
-    .update(events)
+    .update(regions)
     .set({
-      name: VANCOUVER_DROP.name,
-      venue: VANCOUVER_DROP.venue,
-      city: VANCOUVER_DROP.city,
-      summary: VANCOUVER_DROP.summary,
-      timeZone: "America/Vancouver",
+      enabled: true,
+      venue: TORONTO_PLACE.venue,
+      address: TORONTO_PLACE.address,
+      hours: TORONTO_PLACE.hours,
+      timeZone: TORONTO_PLACE.timeZone,
     })
-    .where(eq(events.slug, "dank-club"));
-  const [dank] = await db.select().from(events).where(eq(events.slug, "dank-club")).limit(1);
-  if (dank) {
-    for (let position = 1; position <= 4; position += 1) {
-      await db
-        .insert(dropStrains)
-        .values({
-          eventId: dank.id,
-          position,
-          name: "",
-          jarOnHand: 12,
-          jarReserved: 0,
-        })
-        .onConflictDoNothing({ target: [dropStrains.eventId, dropStrains.position] });
-    }
-  }
-  void dankInserted;
+    .where(eq(regions.slug, "toronto"));
+  await db
+    .update(regions)
+    .set({
+      enabled: true,
+      venue: VANCOUVER_PLACE.venue,
+      address: VANCOUVER_PLACE.address,
+      hours: VANCOUVER_PLACE.hours || null,
+      timeZone: VANCOUVER_PLACE.timeZone,
+    })
+    .where(eq(regions.slug, "vancouver"));
 
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   if (adminEmail) {
@@ -315,89 +173,6 @@ async function main() {
     }
   }
 
-  if (localPersonas()) {
-    const horseshoe = regionBySlug.get("on-golden-horseshoe")!;
-    const demos = [
-      {
-        email: "pending@eleve.select",
-        name: "Pending collector",
-        role: "popup_customer" as const,
-        status: "pending" as const,
-        regionId: null,
-        approvedAt: null,
-      },
-      {
-        email: "toronto@eleve.select",
-        name: "Toronto collector",
-        role: "popup_customer" as const,
-        status: "approved" as const,
-        regionId: null,
-        approvedAt: new Date(),
-      },
-      {
-        email: "applicant@eleve.select",
-        name: "Wholesale applicant",
-        role: "wholesale_applicant" as const,
-        status: "approved" as const,
-        regionId: null,
-        approvedAt: new Date(),
-      },
-      {
-        email: "buyer@eleve.select",
-        name: "Horseshoe buyer",
-        role: "wholesale_buyer" as const,
-        status: "approved" as const,
-        regionId: horseshoe,
-        approvedAt: new Date(),
-      },
-    ];
-
-    for (const demo of demos) {
-      if (demo.email === adminEmail) continue;
-      await db.insert(accounts).values(demo).onConflictDoNothing({ target: accounts.email });
-    }
-
-    const [applicant] = await db
-      .select()
-      .from(accounts)
-      .where(eq(accounts.email, "applicant@eleve.select"))
-      .limit(1);
-    if (applicant) {
-      const [existingApplication] = await db
-        .select({ id: wholesaleApplications.id })
-        .from(wholesaleApplications)
-        .where(eq(wholesaleApplications.accountId, applicant.id))
-        .limit(1);
-      if (!existingApplication) {
-        await db.insert(wholesaleApplications).values({
-        accountId: applicant.id,
-        businessName: "Harbour Leaf",
-        contactName: applicant.name,
-        phone: "+1 416 555 0148",
-        requestedRegionId: horseshoe,
-        licenseNumber: "ON-RETAIL-DEMO",
-        note: "Requesting the Golden Horseshoe desk.",
-        status: "pending",
-        });
-      }
-    }
-
-    const [existingRequest] = await db.select({ id: accessRequests.id }).from(accessRequests).limit(1);
-    if (!existingRequest) {
-      await db.insert(accessRequests).values({
-        name: "Sample collector",
-        email: "sample.collector@example.com",
-        city: "Toronto",
-        channel: "Signal",
-        phone: "",
-        note: "Asked to be added for the King West drop.",
-      });
-    }
-  }
-
-  await db.execute(
-    sql`update events set early_access_opens_at = preorder_opens_at - interval '3 hours' where early_access_opens_at is null`,
-  );
   const missingCodes = await db.select({ id: accounts.id }).from(accounts).where(isNull(accounts.referralCode));
   for (const account of missingCodes) {
     await db

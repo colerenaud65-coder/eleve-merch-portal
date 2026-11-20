@@ -75,7 +75,7 @@ export default async function AccountPage({
 
       <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Referral</h2>
       <p className="mt-4 text-sm">
-        Code {code}. {referrals} {referrals === 1 ? "signup" : "signups"}. Early access to the next drop, not a discount.
+        Code {code}. {referrals} {referrals === 1 ? "signup" : "signups"}. A referral opens early access on the next drop. It is not a discount.
       </p>
       <p className="mt-2 text-sm">
         {origin}/r/{code}
@@ -83,7 +83,7 @@ export default async function AccountPage({
 
       <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Collector</h2>
       {boxes.length === 0 ? (
-        <p className="mt-4 text-sm text-mute">No numbered boxes yet.</p>
+        <p className="mt-4 text-sm text-mute">No numbered boxes yet. The first drop is still to come.</p>
       ) : (
         <ul className="mt-4 divide-y divide-ink border-y border-ink">
           {boxes.map((box) => (

@@ -2,13 +2,18 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Countdown } from "@/components/countdown";
+import { FirstDrop } from "@/components/first-drop";
+import { getCurrentAccount } from "@/server/auth";
 import { readGate } from "@/server/gate";
-import { listEventsForRegion } from "@/server/queries";
+import { getRegionBySlug, listEventsForRegion } from "@/server/queries";
 import { formatWhen, preorderPhase } from "@/server/time";
 
 export default async function HomePage() {
   const gate = await readGate();
   const drops = gate ? await listEventsForRegion(gate.regionSlug).catch(() => []) : [];
+  const region = gate ? await getRegionBySlug(gate.regionSlug).catch(() => null) : null;
+  const account = await getCurrentAccount().catch(() => null);
+  const place = region ? [region.venue, region.address, region.hours].filter(Boolean).join(" · ") : null;
   const next = drops[0];
   const phase = next ? preorderPhase(next) : null;
 
@@ -53,7 +58,7 @@ export default async function HomePage() {
           <div>
             <h2 className="text-[11px] uppercase tracking-[0.2em]">In {gate?.regionName}</h2>
             {drops.length === 0 ? (
-              <p className="mt-4 text-sm text-mute">No drop is scheduled in this region.</p>
+              <FirstDrop place={place} signedIn={Boolean(account)} consented={account?.marketingConsent} />
             ) : (
               <ul className="mt-4 divide-y divide-ink border-y border-ink">
                 {drops.map((event) => (

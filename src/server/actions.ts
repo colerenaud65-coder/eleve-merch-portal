@@ -2,7 +2,7 @@
 
 import { randomBytes } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -220,27 +220,32 @@ export async function applyWholesale(_prev: { error?: string; ok?: boolean } | n
     .where(and(eq(regions.id, requestedRegionId), eq(regions.channel, "wholesale")))
     .limit(1);
   if (!region) return { error: "Choose one of the three Ontario regions." };
-  const [open] = await getDb()
-    .select()
-    .from(wholesaleApplications)
-    .where(and(eq(wholesaleApplications.accountId, account.id), eq(wholesaleApplications.status, "pending")))
-    .limit(1);
-  if (open) return { error: "An application is already waiting." };
-  await getDb().insert(wholesaleApplications).values({
-    accountId: account.id,
-    businessName,
-    contactName,
-    phone,
-    requestedRegionId: region.id,
-    licenseNumber: licenseNumber || null,
-    note: note || null,
+  const waiting = await getDb().transaction(async (tx) => {
+    await tx.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, account.id)).for("update");
+    const [open] = await tx
+      .select({ id: wholesaleApplications.id })
+      .from(wholesaleApplications)
+      .where(and(eq(wholesaleApplications.accountId, account.id), eq(wholesaleApplications.status, "pending")))
+      .limit(1);
+    if (open) return true;
+    await tx.insert(wholesaleApplications).values({
+      accountId: account.id,
+      businessName,
+      contactName,
+      phone,
+      requestedRegionId: region.id,
+      licenseNumber: licenseNumber || null,
+      note: note || null,
+    });
+    if (account.role === "popup_customer") {
+      await tx
+        .update(accounts)
+        .set({ role: "wholesale_applicant" })
+        .where(eq(accounts.id, account.id));
+    }
+    return false;
   });
-  if (account.role === "popup_customer") {
-    await getDb()
-      .update(accounts)
-      .set({ role: "wholesale_applicant" })
-      .where(eq(accounts.id, account.id));
-  }
+  if (waiting) return { error: "An application is already waiting." };
   revalidatePath("/account");
   return { ok: true };
 }
@@ -274,31 +279,33 @@ export async function decideApplication(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const decision = String(formData.get("decision") ?? "");
   const regionId = String(formData.get("regionId") ?? "");
-  const [application] = await getDb()
-    .select()
-    .from(wholesaleApplications)
-    .where(eq(wholesaleApplications.id, id))
-    .limit(1);
-  if (!application || application.status !== "pending") return;
-  if (decision === "declined") {
-    await getDb()
-      .update(wholesaleApplications)
-      .set({ status: "declined", decidedAt: new Date(), decidedBy: admin.id })
-      .where(eq(wholesaleApplications.id, id));
-    revalidatePath("/admin/approvals");
-    return;
-  }
-  const [region] = await getDb()
-    .select()
-    .from(regions)
-    .where(and(eq(regions.id, regionId), eq(regions.channel, "wholesale")))
-    .limit(1);
-  if (!region) return;
-  await getDb().transaction(async (tx) => {
-    await tx
+  const decided = await getDb().transaction(async (tx) => {
+    const [application] = await tx
+      .select()
+      .from(wholesaleApplications)
+      .where(eq(wholesaleApplications.id, id))
+      .for("update")
+      .limit(1);
+    if (!application || application.status !== "pending") return false;
+    if (decision === "declined") {
+      await tx
+        .update(wholesaleApplications)
+        .set({ status: "declined", decidedAt: new Date(), decidedBy: admin.id })
+        .where(and(eq(wholesaleApplications.id, id), eq(wholesaleApplications.status, "pending")));
+      return true;
+    }
+    const [region] = await tx
+      .select()
+      .from(regions)
+      .where(and(eq(regions.id, regionId), eq(regions.channel, "wholesale")))
+      .limit(1);
+    if (!region) return false;
+    const updated = await tx
       .update(wholesaleApplications)
       .set({ status: "approved", decidedAt: new Date(), decidedBy: admin.id })
-      .where(eq(wholesaleApplications.id, id));
+      .where(and(eq(wholesaleApplications.id, id), eq(wholesaleApplications.status, "pending")))
+      .returning({ id: wholesaleApplications.id });
+    if (updated.length === 0) return false;
     await tx
       .update(accounts)
       .set({
@@ -308,7 +315,9 @@ export async function decideApplication(formData: FormData) {
         approvedAt: new Date(),
       })
       .where(eq(accounts.id, application.accountId));
+    return true;
   });
+  if (!decided) return;
   revalidatePath("/admin/approvals");
 }
 
@@ -386,34 +395,42 @@ export async function saveEvent(formData: FormData) {
   const open = zonedToUtc(preorderOpensAt, region.timeZone);
   const close = zonedToUtc(preorderClosesAt, region.timeZone);
   if (![start, end, open, close].every((date) => date && !Number.isNaN(date.getTime()))) return;
-  const created = await getDb().insert(events).values({
-    name,
-    slug,
-    regionId: region.id,
-    city: cityName,
-    venue: venueName,
-    summary,
-    timeZone: region.timeZone,
-    startsAt: start!,
-    endsAt: end!,
-    preorderOpensAt: open!,
-    preorderClosesAt: close!,
-    earlyAccessOpensAt: new Date(open!.getTime() - 3 * 60 * 60 * 1000),
-    complianceConfirmed: false,
-    boxOnHand: 16,
-  }).returning();
-  if (created[0]) {
-    const { dropStrains } = await import("@/db/schema");
-    for (let position = 1; position <= 4; position += 1) {
-      await getDb().insert(dropStrains).values({
-        eventId: created[0].id,
+  const { dropStrains } = await import("@/db/schema");
+  const created = await getDb().transaction(async (tx) => {
+    const inserted = await tx
+      .insert(events)
+      .values({
+        name,
+        slug,
+        regionId: region.id,
+        city: cityName,
+        venue: venueName,
+        summary,
+        timeZone: region.timeZone,
+        startsAt: start!,
+        endsAt: end!,
+        preorderOpensAt: open!,
+        preorderClosesAt: close!,
+        earlyAccessOpensAt: new Date(open!.getTime() - 3 * 60 * 60 * 1000),
+        complianceConfirmed: false,
+        boxOnHand: 16,
+      })
+      .onConflictDoNothing({ target: events.slug })
+      .returning();
+    const event = inserted[0];
+    if (!event) return null;
+    await tx.insert(dropStrains).values(
+      [1, 2, 3, 4].map((position) => ({
+        eventId: event.id,
         position,
         name: "",
         jarOnHand: 0,
         jarReserved: 0,
-      });
-    }
-  }
+      })),
+    );
+    return event;
+  });
+  if (!created) return;
   revalidatePath("/admin/events");
   redirect(`/events/${slug}`);
 }
@@ -502,6 +519,8 @@ export async function setMarketingConsent(formData: FormData) {
     })
     .where(eq(accounts.id, account.id));
   revalidatePath("/account");
+  revalidatePath("/");
+  revalidatePath("/events");
 }
 
 export async function rememberMarketingConsent(formData: FormData) {
@@ -556,6 +575,7 @@ export async function saveDrop(formData: FormData) {
   if (!Number.isInteger(boxOnHand) || boxOnHand < 0 || boxOnHand > 16) return;
   const db = getDb();
   const [current] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+  if (!current || boxOnHand < current.boxReserved) return;
   const earlyRaw = String(formData.get("earlyAccessOpensAt") ?? "");
   const earlyAccessOpensAt =
     earlyRaw && current ? zonedToUtc(earlyRaw, current.timeZone) ?? current.earlyAccessOpensAt : current?.earlyAccessOpensAt;
@@ -569,7 +589,7 @@ export async function saveDrop(formData: FormData) {
       .values({ eventId, position, name, jarOnHand, jarReserved: 0 })
       .onConflictDoUpdate({
         target: [dropStrains.eventId, dropStrains.position],
-        set: { name, jarOnHand },
+        set: { name, jarOnHand: sql`greatest(${jarOnHand}, ${dropStrains.jarReserved})` },
       });
   }
   revalidatePath("/admin/events");

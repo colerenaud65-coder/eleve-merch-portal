@@ -144,7 +144,7 @@ async function commitSold(tx: Tx, regionId: string, needs: Map<string, number>) 
 async function completePreorder(
   tx: Tx,
   args: {
-    account: { id: string; paymentTerms: string };
+    account: { id: string; paymentTerms: string; role: string };
     region: { id: string; slug: string; currency: string; enabled: boolean };
     eventId: string;
     lines: LineInput[];
@@ -153,6 +153,19 @@ async function completePreorder(
 ): Promise<Order> {
   const [event] = await tx.select().from(events).where(eq(events.id, args.eventId)).for("update");
   if (!event || event.cancelled || event.archived) throw new OrderError("This drop is not open.", "event");
+  if (!event.complianceConfirmed) {
+    throw new OrderError("Preorders stay closed until compliance is confirmed for this drop.", "compliance");
+  }
+  const now = new Date();
+  if (now >= event.preorderClosesAt) throw new OrderError("Preorders are not open for this drop.", "window");
+  if (now < event.preorderOpensAt) {
+    const { earlyAccessAt } = await import("@/server/time");
+    const { hasEarlyAccess } = await import("@/server/growth");
+    const earlyAt = earlyAccessAt(event);
+    if (now < earlyAt || !(await hasEarlyAccess(args.account.id, args.account.role))) {
+      throw new OrderError("Preorders are not open for this drop.", "window");
+    }
+  }
   const [box] = await tx.select().from(products).where(eq(products.slug, "selection-box")).limit(1);
   const [jar] = await tx.select().from(products).where(eq(products.slug, "jar-7g")).limit(1);
   if (!box || !jar) throw new OrderError("The drop catalog is missing.", "catalog");

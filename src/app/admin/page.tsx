@@ -41,6 +41,9 @@ export default async function AdminHome() {
         ))}
       </div>
       <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Funnel</h2>
+      {funnel.every((step) => step.total === 0) ? (
+        <p className="mt-4 text-sm text-mute">No activity yet.</p>
+      ) : null}
       <ul className="mt-4 divide-y divide-ink border-y border-ink text-sm">
         {funnel.map((step) => (
           <li key={step.name} className="flex justify-between py-3">
@@ -59,6 +62,7 @@ export default async function AdminHome() {
         ))}
       </p>
       <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Orders by drop</h2>
+      {events.length === 0 ? <p className="mt-4 text-sm text-mute">No drops yet.</p> : null}
       <div className="mt-4 divide-y divide-ink border-y border-ink">
         {events.map(({ event, region }) => {
           const rows = orders.filter((row) => row.order.eventId === event.id);

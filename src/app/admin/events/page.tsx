@@ -132,6 +132,9 @@ export default async function AdminEventsPage() {
     <main className="space-y-12">
       <section>
         <h1 className="font-serif text-5xl">Drops</h1>
+        {active.length === 0 ? (
+          <p className="mt-6 text-sm text-mute">No drops yet. Create the first one below.</p>
+        ) : null}
         <div className="mt-6 space-y-6">
           {active.map((row) => (
             <DropCard key={row.event.id} event={row.event} regionName={row.region.name} strains={strainRows} />
@@ -152,7 +155,10 @@ export default async function AdminEventsPage() {
       </section>
       <section>
         <h2 className="text-[11px] uppercase tracking-[0.2em]">New drop</h2>
-        <p className="mt-2 text-sm text-mute">Times are local to the region.</p>
+        <p className="mt-2 text-sm text-mute">
+          Toronto is Sunday Service by Caked, 1196 Queen St W, Sundays 12:00–6:00 PM ET. Vancouver is Dank Club,
+          6416 Main St. Times you enter are local to that city: America/Toronto or America/Vancouver.
+        </p>
         <form action={saveEvent} className="mt-4 grid gap-3 sm:grid-cols-2">
           <label>
             Name
@@ -160,7 +166,7 @@ export default async function AdminEventsPage() {
           </label>
           <label>
             Slug
-            <input name="slug" required placeholder="toronto-spring" />
+            <input name="slug" required placeholder="first-drop" />
           </label>
           <label>
             Region
