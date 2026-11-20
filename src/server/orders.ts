@@ -760,3 +760,67 @@ export async function completeOrder(orderId: string) {
   }
   return closed.updated;
 }
+
+export async function undoDeposit(depositId: string) {
+  const { deposits } = await import("@/db/schema");
+  await getDb().transaction(async (tx) => {
+    const [deposit] = await tx.select().from(deposits).where(eq(deposits.id, depositId)).limit(1);
+    if (!deposit) throw new OrderError("That payment is already undone.", "deposit");
+    const [order] = await tx.select().from(orders).where(eq(orders.id, deposit.orderId)).for("update");
+    if (!order || order.status === "completed" || order.status === "cancelled") {
+      throw new OrderError("This order can no longer be undone.", "status");
+    }
+    await tx.delete(deposits).where(eq(deposits.id, deposit.id));
+    const received = order.depositReceivedCents - deposit.amountCents;
+    if (received < 0) throw new OrderError("That payment does not match the order.", "deposit");
+    const balanceCents = Math.max(order.subtotalCents - received, 0);
+    const terms = order.paymentTerms === "net_15" || order.paymentTerms === "net_30";
+    let status = order.status;
+    if (terms) status = received >= order.subtotalCents ? "deposit_received" : "on_terms";
+    else if (order.status === "ready_for_pickup" && received >= order.depositRequiredCents) status = "ready_for_pickup";
+    else if (received <= 0) status = "awaiting_deposit";
+    else if (received < order.depositRequiredCents) status = "deposit_partial";
+    else status = "deposit_received";
+    await tx
+      .update(orders)
+      .set({
+        depositReceivedCents: received,
+        balanceCents,
+        status,
+        holdExpiresAt: !terms && received < order.depositRequiredCents ? order.holdExpiresAt ?? holdExpiry() : null,
+      })
+      .where(eq(orders.id, order.id));
+  });
+}
+
+export async function undoPickup(orderId: string) {
+  await getDb().transaction(async (tx) => {
+    const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
+    if (!order || order.status !== "completed" || !order.eventId) {
+      throw new OrderError("This pickup can no longer be undone.", "status");
+    }
+    const lines = await linesFor(tx, order.id);
+    const allocated = await tx.select().from(boxAllocations).where(eq(boxAllocations.orderId, order.id));
+    if (allocated.length > 0) {
+      await tx
+        .update(events)
+        .set({
+          boxOnHand: sql`${events.boxOnHand} + ${allocated.length}`,
+          boxReserved: sql`${events.boxReserved} + ${allocated.length}`,
+        })
+        .where(eq(events.id, order.eventId));
+    }
+    for (const line of lines) {
+      if (!line.strainPosition) continue;
+      await tx
+        .update(dropStrains)
+        .set({
+          jarOnHand: sql`${dropStrains.jarOnHand} + ${line.quantity}`,
+          jarReserved: sql`${dropStrains.jarReserved} + ${line.quantity}`,
+        })
+        .where(and(eq(dropStrains.eventId, order.eventId), eq(dropStrains.position, line.strainPosition)));
+    }
+    const status = order.depositReceivedCents >= order.depositRequiredCents ? "ready_for_pickup" : "deposit_partial";
+    await tx.update(orders).set({ status, checkedInAt: null }).where(eq(orders.id, order.id));
+  });
+}

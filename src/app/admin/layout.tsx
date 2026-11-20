@@ -1,34 +1,15 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { AdminShell } from "@/components/admin/shell";
 import { getCurrentAccount } from "@/server/auth";
 
-const links = [
-  ["/admin", "Overview"],
-  ["/admin/approvals", "Approvals"],
-  ["/admin/events", "Drops"],
-  ["/admin/orders", "Orders"],
-  ["/admin/pickup", "Pickup"],
-  ["/admin/claims", "Claims"],
-];
+export const metadata: Metadata = { title: "Desk" };
 
-export const metadata = { robots: { index: false, follow: false } };
+export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const account = await getCurrentAccount();
   if (!account || account.role !== "admin" || account.status !== "approved") redirect("/account");
-
-  return (
-    <div className="mx-auto max-w-6xl px-5 py-10">
-      <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Admin</p>
-      <nav className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.16em] print:hidden">
-        {links.map(([href, label]) => (
-          <Link key={href} href={href}>
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <div className="mt-8">{children}</div>
-    </div>
-  );
+  return <AdminShell>{children}</AdminShell>;
 }

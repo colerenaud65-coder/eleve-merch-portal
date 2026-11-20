@@ -464,6 +464,7 @@ export async function saveInventory(formData: FormData) {
     await db.update(inventory).set({ onHand }).where(eq(inventory.id, row.id));
   }
   revalidatePath("/admin/events");
+  revalidatePath("/admin/wholesale");
 }
 
 export async function adminRecordDeposit(formData: FormData) {
@@ -482,6 +483,7 @@ export async function adminRecordDeposit(formData: FormData) {
     return;
   }
   revalidatePath("/admin/orders");
+  revalidatePath("/admin/run");
   revalidatePath(`/orders/${orderId}`);
 }
 
@@ -497,6 +499,7 @@ export async function adminOrderStatus(formData: FormData) {
     return;
   }
   revalidatePath("/admin/orders");
+  revalidatePath("/admin/run");
   revalidatePath(`/orders/${orderId}`);
 }
 
@@ -562,6 +565,7 @@ export async function setDropArchived(formData: FormData) {
   if (!id) return;
   await getDb().update(events).set({ archived }).where(eq(events.id, id));
   revalidatePath("/admin/events");
+  revalidatePath("/admin/drops");
   revalidatePath("/admin");
   revalidatePath("/events");
   revalidatePath("/");

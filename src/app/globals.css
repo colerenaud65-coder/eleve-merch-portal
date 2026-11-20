@@ -84,6 +84,30 @@ button.secondary,
   color: #121212;
 }
 
+.desk button,
+.desk .btn {
+  min-height: 3.25rem;
+}
+
+@media (max-width: 1023px) {
+  .desk button,
+  .desk .btn {
+    width: 100%;
+  }
+}
+
+.desk nav a,
+.desk .toast button {
+  width: auto;
+}
+
+@media print {
+  .desk aside,
+  .desk nav {
+    display: none !important;
+  }
+}
+
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;

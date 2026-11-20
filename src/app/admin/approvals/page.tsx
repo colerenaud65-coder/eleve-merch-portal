@@ -1,3 +1,5 @@
+import { ConfirmSubmit } from "@/components/admin/confirm-submit";
+import { DeskHeader } from "@/components/admin/desk-header";
 import {
   approvePopup,
   createInvite,
@@ -31,7 +33,7 @@ export default async function ApprovalsPage() {
   return (
     <main className="space-y-12">
       <section>
-        <h1 className="font-serif text-5xl">Approvals</h1>
+        <DeskHeader title="People" back="/admin/more" />
         <div className="mt-6 space-y-4">
           {pending.length === 0 ? <p className="text-sm text-mute">No accounts waiting.</p> : null}
           {pending.map((account) => (
@@ -47,9 +49,7 @@ export default async function ApprovalsPage() {
                 </form>
                 <form action={suspendAccount}>
                   <input type="hidden" name="accountId" value={account.id} />
-                  <button type="submit" className="secondary">
-                    Suspend
-                  </button>
+                  <ConfirmSubmit className="secondary" label="Suspend" message="Suspend this account? They will not be able to order." />
                 </form>
               </div>
             </article>
@@ -114,9 +114,7 @@ export default async function ApprovalsPage() {
                   <button type="submit" name="decision" value="approved">
                     Approve
                   </button>
-                  <button type="submit" name="decision" value="declined" className="secondary">
-                    Decline
-                  </button>
+                  <ConfirmSubmit name="decision" value="declined" className="secondary" label="Decline" message="Decline this wholesale application?" />
                 </form>
               ) : null}
             </article>
