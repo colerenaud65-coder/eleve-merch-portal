@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { eq } from "drizzle-orm";
+
 import { getDb } from "@/db/index";
 import { events } from "@/db/schema";
 import { getCurrentAccount } from "@/server/auth";
 import { saveWizard, type WizardInput, type WizardResult } from "@/server/desk";
 import { OrderError, completeOrder, markReady, recordDeposit, undoDeposit, undoPickup } from "@/server/orders";
 import { getOrderDetail } from "@/server/queries";
-import { eq } from "drizzle-orm";
 
 async function requireAdmin() {
   const account = await getCurrentAccount();
@@ -49,19 +50,14 @@ export async function deskMarkDeposit(orderId: string): Promise<{ ok: true; depo
   const due = detail.order.depositRequiredCents - detail.order.depositReceivedCents;
   if (due <= 0) return { ok: false, error: "The deposit is already in." };
   try {
-    const { deposits } = await import("@/db/schema");
-    const before = await getDb().select({ id: deposits.id }).from(deposits).where(eq(deposits.orderId, orderId));
-    await recordDeposit({
+    const paid = await recordDeposit({
       orderId,
       amountCents: due,
       note: "Marked received at the desk",
       recordedBy: admin.id,
     });
-    const after = await getDb().select({ id: deposits.id }).from(deposits).where(eq(deposits.orderId, orderId));
-    const known = new Set(before.map((row) => row.id));
-    const created = after.find((row) => !known.has(row.id));
     refresh(detail.order.eventId);
-    return { ok: true, depositId: created?.id };
+    return { ok: true, depositId: paid.depositId };
   } catch (error) {
     return { ok: false, error: failure(error) };
   }
@@ -89,17 +85,13 @@ export async function deskMarkPickedUp(
   try {
     let depositId: string | undefined;
     if (detail.order.balanceCents > 0) {
-      const { deposits } = await import("@/db/schema");
-      const before = await getDb().select({ id: deposits.id }).from(deposits).where(eq(deposits.orderId, orderId));
-      await recordDeposit({
+      const paid = await recordDeposit({
         orderId,
         amountCents: detail.order.balanceCents,
         note: "Collected at the door",
         recordedBy: admin.id,
       });
-      const after = await getDb().select({ id: deposits.id }).from(deposits).where(eq(deposits.orderId, orderId));
-      const known = new Set(before.map((row) => row.id));
-      depositId = after.find((row) => !known.has(row.id))?.id;
+      depositId = paid.depositId;
     }
     try {
       await markReady(orderId);
@@ -127,9 +119,20 @@ export async function deskUndoPickup(orderId: string): Promise<{ ok: true } | { 
 
 export async function deskCloseDrop(eventId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdmin();
-  await getDb().update(events).set({ cancelled: true }).where(eq(events.id, eventId));
+  const db = getDb();
+  const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+  if (!event) return { ok: false, error: "That drop is not on the list." };
+  const now = new Date();
+  await db
+    .update(events)
+    .set({
+      endsAt: event.endsAt > now ? now : event.endsAt,
+      preorderClosesAt: event.preorderClosesAt > now ? now : event.preorderClosesAt,
+    })
+    .where(eq(events.id, event.id));
   refresh(eventId);
   revalidatePath("/events");
+  revalidatePath(`/events/${event.slug}`);
   revalidatePath("/");
   return { ok: true };
 }

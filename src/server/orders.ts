@@ -141,6 +141,22 @@ async function commitSold(tx: Tx, regionId: string, needs: Map<string, number>) 
   }
 }
 
+async function restoreSold(tx: Tx, regionId: string, needs: Map<string, number>) {
+  for (const [productId, quantity] of needs) {
+    const updated = await tx
+      .update(inventory)
+      .set({
+        onHand: sql`${inventory.onHand} + ${quantity}`,
+        reserved: sql`${inventory.reserved} + ${quantity}`,
+      })
+      .where(and(eq(inventory.productId, productId), eq(inventory.regionId, regionId)))
+      .returning({ id: inventory.id });
+    if (updated.length === 0) {
+      throw new OrderError("Stock could not be put back.", "stock");
+    }
+  }
+}
+
 async function completePreorder(
   tx: Tx,
   args: {
@@ -638,13 +654,17 @@ export async function recordDeposit(input: {
         depositReceivedCents < order.depositRequiredCents ? "deposit_partial" : "deposit_received";
       if (depositReceivedCents >= order.depositRequiredCents) holdExpiresAt = null;
     }
-    await tx.insert(deposits).values({
-      orderId: order.id,
-      amountCents: input.amountCents,
-      reference: order.transferReference,
-      note: input.note?.trim() || null,
-      recordedBy: input.recordedBy,
-    });
+    const [deposit] = await tx
+      .insert(deposits)
+      .values({
+        orderId: order.id,
+        amountCents: input.amountCents,
+        reference: order.transferReference,
+        note: input.note?.trim() || null,
+        recordedBy: input.recordedBy,
+      })
+      .returning({ id: deposits.id });
+    if (!deposit) throw new OrderError("The payment did not save.", "deposit");
     const [updated] = await tx
       .update(orders)
       .set({ depositReceivedCents, balanceCents, status, holdExpiresAt })
@@ -652,6 +672,7 @@ export async function recordDeposit(input: {
       .returning();
     return {
       updated,
+      depositId: deposit.id,
       paid: updated.status === "deposit_received" && order.status !== "deposit_received",
       eventId: order.eventId,
       accountId: order.accountId,
@@ -666,7 +687,7 @@ export async function recordDeposit(input: {
       orderId: result.updated.id,
     });
   }
-  return result.updated;
+  return { ...result.updated, depositId: result.depositId };
 }
 
 export async function markReady(orderId: string) {
@@ -796,31 +817,51 @@ export async function undoDeposit(depositId: string) {
 export async function undoPickup(orderId: string) {
   await getDb().transaction(async (tx) => {
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId)).for("update");
-    if (!order || order.status !== "completed" || !order.eventId) {
+    if (!order || order.status !== "completed") {
       throw new OrderError("This pickup can no longer be undone.", "status");
     }
     const lines = await linesFor(tx, order.id);
     const allocated = await tx.select().from(boxAllocations).where(eq(boxAllocations.orderId, order.id));
-    if (allocated.length > 0) {
-      await tx
-        .update(events)
-        .set({
-          boxOnHand: sql`${events.boxOnHand} + ${allocated.length}`,
-          boxReserved: sql`${events.boxReserved} + ${allocated.length}`,
-        })
-        .where(eq(events.id, order.eventId));
+    // Same split as completeOrder: numbered boxes follow allocations, jars follow strain lines.
+    // Box order-line quantity is not a second stock move. Allocations stay; completeOrder does not delete them.
+    if (order.eventId && (allocated.length > 0 || lines.some((line) => line.strainPosition))) {
+      if (allocated.length > 0) {
+        const restored = await tx
+          .update(events)
+          .set({
+            boxOnHand: sql`${events.boxOnHand} + ${allocated.length}`,
+            boxReserved: sql`${events.boxReserved} + ${allocated.length}`,
+          })
+          .where(eq(events.id, order.eventId))
+          .returning({ id: events.id });
+        if (restored.length === 0) throw new OrderError("Numbered boxes could not be put back.", "stock");
+      }
+      for (const line of lines) {
+        if (!line.strainPosition) continue;
+        const restored = await tx
+          .update(dropStrains)
+          .set({
+            jarOnHand: sql`${dropStrains.jarOnHand} + ${line.quantity}`,
+            jarReserved: sql`${dropStrains.jarReserved} + ${line.quantity}`,
+          })
+          .where(
+            and(eq(dropStrains.eventId, order.eventId), eq(dropStrains.position, line.strainPosition)),
+          )
+          .returning({ id: dropStrains.id });
+        if (restored.length === 0) throw new OrderError("Jars could not be put back.", "stock");
+      }
+    } else {
+      await restoreSold(tx, order.regionId, await stockNeeds(tx, lines));
     }
-    for (const line of lines) {
-      if (!line.strainPosition) continue;
-      await tx
-        .update(dropStrains)
-        .set({
-          jarOnHand: sql`${dropStrains.jarOnHand} + ${line.quantity}`,
-          jarReserved: sql`${dropStrains.jarReserved} + ${line.quantity}`,
-        })
-        .where(and(eq(dropStrains.eventId, order.eventId), eq(dropStrains.position, line.strainPosition)));
-    }
-    const status = order.depositReceivedCents >= order.depositRequiredCents ? "ready_for_pickup" : "deposit_partial";
+    const terms = order.paymentTerms === "net_15" || order.paymentTerms === "net_30";
+    const status =
+      terms && order.depositReceivedCents < order.subtotalCents
+        ? "on_terms"
+        : order.depositReceivedCents >= order.depositRequiredCents
+          ? "ready_for_pickup"
+          : order.depositReceivedCents > 0
+            ? "deposit_partial"
+            : "awaiting_deposit";
     await tx.update(orders).set({ status, checkedInAt: null }).where(eq(orders.id, order.id));
   });
 }

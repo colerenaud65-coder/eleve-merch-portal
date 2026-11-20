@@ -48,7 +48,7 @@ export default async function RunPage({
       {missing ? <p className="mb-4 text-sm">No order matched that code.</p> : null}
       <RunDesk
         dropId={event.id}
-        closed={event.cancelled}
+        closed={event.cancelled || status === "ended"}
         initialQuery={scanned?.order.eventId === event.id ? scanned.order.number : ""}
         stock={stock}
         orders={orders.map(({ order, account }) => ({
