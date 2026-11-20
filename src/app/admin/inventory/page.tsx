@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function InventoryPage() {
-  redirect("/admin/events");
+export default function InventoryRedirect() {
+  redirect("/admin/wholesale");
 }

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { ConfirmSubmit, SubmitButton } from "@/components/admin/confirm-submit";
+import { DeskHeader } from "@/components/admin/desk-header";
 import { PACKAGE_LABEL, REWARDS } from "@/server/points";
 import { generateClaims, cancelReward, fulfillReward } from "@/server/actions";
 import { listAllEvents, listClaimCodes, listRedemptions } from "@/server/queries";
@@ -16,7 +18,7 @@ export default async function ClaimsPage() {
   return (
     <main className="space-y-12">
       <section>
-        <h1 className="font-serif text-5xl">Package claims</h1>
+        <DeskHeader title="Points & QR" back="/admin/more" />
         <p className="mt-3 max-w-xl text-sm text-mute">
           One code per package. A box is 4 units and a jar is 1. Every 16 units adds 500 points. Merch is handed over in person.
         </p>
@@ -45,7 +47,7 @@ export default async function ClaimsPage() {
             <input name="count" type="number" min={1} max={48} defaultValue={8} required />
           </label>
           <div className="flex items-end">
-            <button type="submit">Generate codes</button>
+            <SubmitButton>Generate codes</SubmitButton>
           </div>
         </form>
       </section>
@@ -111,9 +113,7 @@ export default async function ClaimsPage() {
                     </form>
                     <form action={cancelReward}>
                       <input type="hidden" name="id" value={row.redemption.id} />
-                      <button type="submit" className="secondary">
-                        Cancel
-                      </button>
+                      <ConfirmSubmit className="secondary" label="Cancel" message="Cancel this redemption and return the points?" />
                     </form>
                   </div>
                 ) : null}

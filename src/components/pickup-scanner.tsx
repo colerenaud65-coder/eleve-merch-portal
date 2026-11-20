@@ -14,7 +14,13 @@ function stopStream(video: HTMLVideoElement | null) {
   }
 }
 
-export function PickupScanner() {
+export function PickupScanner({
+  action = "/admin/pickup",
+  hidden,
+}: {
+  action?: string;
+  hidden?: Record<string, string>;
+}) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [token, setToken] = useState("");
@@ -86,7 +92,11 @@ export function PickupScanner() {
       const value = codes[0]?.rawValue;
       if (value) {
         const parsed = value.includes("/pickup/") ? (value.split("/pickup/").pop() ?? value) : value;
-        router.push(`/admin/pickup?token=${encodeURIComponent(parsed.split(/[?#]/)[0] ?? "")}`);
+        const tokenValue = parsed.split(/[?#]/)[0] ?? "";
+        const target = new URL(action, window.location.origin);
+        for (const [key, field] of Object.entries(hidden ?? {})) target.searchParams.set(key, field);
+        target.searchParams.set("token", tokenValue);
+        router.push(`${target.pathname}${target.search}`);
         return;
       }
       window.setTimeout(tick, 400);
@@ -95,7 +105,10 @@ export function PickupScanner() {
   }
 
   return (
-    <form action="/admin/pickup" className="grid gap-3">
+    <form action={action} className="grid gap-3">
+      {Object.entries(hidden ?? {}).map(([key, value]) => (
+        <input key={key} type="hidden" name={key} value={value} />
+      ))}
       <label>
         Pickup code or link
         <input

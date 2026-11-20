@@ -1,7 +1,10 @@
 import Link from "next/link";
 
+import { ConfirmSubmit, SubmitButton } from "@/components/admin/confirm-submit";
+import { DeskHeader } from "@/components/admin/desk-header";
 import { adminOrderStatus, adminRecordDeposit } from "@/server/actions";
-import { orderStatusLabel, termsLabel } from "@/lib/labels";
+import { orderChip } from "@/server/desk";
+import { termsLabel } from "@/lib/labels";
 import { formatMoney } from "@/server/money";
 import { listAllEvents, listAllOrders } from "@/server/queries";
 import { formatWhen } from "@/server/time";
@@ -20,7 +23,7 @@ export default async function AdminOrdersPage({
 
   return (
     <main>
-      <h1 className="font-serif text-5xl">Orders</h1>
+      <DeskHeader title="Orders" back="/admin" />
       <nav className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-[11px] uppercase tracking-[0.14em]">
         <Link href="/admin/orders" className={selected ? "text-mute" : "underline"}>
           All
@@ -53,9 +56,7 @@ export default async function AdminOrdersPage({
                     : ""}
                 </p>
               </div>
-              <p className="text-[11px] uppercase tracking-[0.14em]">
-                {orderStatusLabel[order.status]}
-              </p>
+              <p className="border border-ink px-2 py-2 text-[10px] uppercase tracking-[0.14em]">{orderChip(order.status)}</p>
             </div>
             <p className="mt-3 text-sm">
               {formatMoney(order.depositReceivedCents, order.currency)} received ·{" "}
@@ -69,25 +70,23 @@ export default async function AdminOrdersPage({
                     Deposit received
                     <input name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" />
                   </label>
-                  <button type="submit">Record</button>
+                  <SubmitButton>Record</SubmitButton>
                 </form>
                 <form action={adminOrderStatus}>
                   <input type="hidden" name="orderId" value={order.id} />
-                  <button type="submit" name="status" value="ready" className="secondary">
+                  <SubmitButton className="secondary" name="status" value="ready">
                     Ready
-                  </button>
+                  </SubmitButton>
                 </form>
                 <form action={adminOrderStatus}>
                   <input type="hidden" name="orderId" value={order.id} />
-                  <button type="submit" name="status" value="complete" className="secondary">
+                  <SubmitButton className="secondary" name="status" value="complete">
                     Picked up
-                  </button>
+                  </SubmitButton>
                 </form>
                 <form action={adminOrderStatus}>
                   <input type="hidden" name="orderId" value={order.id} />
-                  <button type="submit" name="status" value="cancel" className="secondary">
-                    Cancel
-                  </button>
+                  <ConfirmSubmit className="secondary" name="status" value="cancel" label="Cancel" message="Cancel this order? A completed pickup stays on the books." />
                 </form>
               </div>
             ) : null}
