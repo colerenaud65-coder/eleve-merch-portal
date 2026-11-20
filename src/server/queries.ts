@@ -424,6 +424,7 @@ export async function listClaimCodes(limit = 200) {
     .select({
       code: claimCodes,
       eventName: events.name,
+      eventTimeZone: events.timeZone,
       claimerName: claimer.name,
       claimerEmail: claimer.email,
     })

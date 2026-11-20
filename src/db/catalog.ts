@@ -97,18 +97,34 @@ export const regionSeeds: RegionSeed[] = [
 export const retailRegions = regionSeeds.filter((region) => region.channel === "retail");
 export const customerRetailRegions = retailRegions.filter((region) => region.slug !== "united-states");
 
+export const TORONTO_PLACE = {
+  venue: "Sunday Service by Caked",
+  address: "1196 Queen St W",
+  city: "Toronto",
+  hours: "Sundays, 12:00–6:00 PM ET",
+  timeZone: "America/Toronto",
+};
+
+export const VANCOUVER_PLACE = {
+  venue: "Dank Club",
+  address: "6416 Main St",
+  city: "Vancouver",
+  hours: "",
+  timeZone: "America/Vancouver",
+};
+
 export const TORONTO_DROP = {
   name: "Sunday Service",
-  venue: "Sunday Service by Caked, 1196 Queen St W",
-  city: "Toronto",
-  summary: "Every Sunday, 12:00–6:00 PM ET. The 4-strain box is 7 g of each strain. Jars are those same strains.",
+  venue: `${TORONTO_PLACE.venue}, ${TORONTO_PLACE.address}`,
+  city: TORONTO_PLACE.city,
+  summary: TORONTO_PLACE.hours,
 };
 
 export const VANCOUVER_DROP = {
   name: "Dank Club",
-  venue: "Dank Club, 6416 Main St",
-  city: "Vancouver",
-  summary: "Pop-up at Dank Club. The date is set for each drop.",
+  venue: `${VANCOUVER_PLACE.venue}, ${VANCOUVER_PLACE.address}`,
+  city: VANCOUVER_PLACE.city,
+  summary: "Pop-up at Dank Club.",
 };
 export const wholesaleRegions = regionSeeds.filter((region) => region.channel === "wholesale");
 
@@ -164,24 +180,6 @@ export const productSeeds: ProductSeed[] = [
     sortOrder: 200,
   },
 ];
-
-export type EventSeed = {
-  slug: string;
-  name: string;
-  regionSlug: string;
-  venue: string;
-  city: string;
-  summary: string;
-  timeZone: string;
-  startsAt: string;
-  endsAt: string;
-  preorderOpensAt: string;
-  preorderClosesAt: string;
-  complianceConfirmed: boolean;
-  complianceNote: string | null;
-};
-
-export const eventSeeds: EventSeed[] = [];
 
 export function editionLabel(editionNumber: number, editionSize = EDITION_SIZE) {
   return `${String(editionNumber).padStart(2, "0")}/${String(editionSize).padStart(2, "0")}`;

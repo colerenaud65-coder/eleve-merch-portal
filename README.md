@@ -42,7 +42,7 @@ The project on Vercel is `elevestorefront-wiip`. Production is [https://elevedir
 
    Leave `ALLOW_DEV_PREVIEW` unset on Vercel. It is ignored whenever `NODE_ENV` is production or `VERCEL_ENV` is set.
 
-6. **Redeploy** after Neon and Clerk are connected. `vercel.json` sets the framework to Next.js and the build runs migrations and the seed when `DATABASE_URL` is present, then `next build`. You do not need a terminal for `db:setup`. The seed only inserts rows that are missing. It does not delete orders, reset stock, or duplicate catalog rows. It creates the admin account from `ADMIN_EMAIL` if that email is not already an admin. If `DATABASE_URL` is missing, the build still succeeds and the site shows a setup screen instead of erroring.
+6. **Redeploy** after Neon and Clerk are connected. `vercel.json` sets the framework to Next.js and the build runs migrations and the seed when `DATABASE_URL` is present, then `next build`. You do not need a terminal for `db:setup`. Migration `0005_blank_slate` clears test drops, orders, claim codes, and points once, recorded as `blank_slate_2026_11`, and does not run again. The seed does not create drops, dates, orders, or strains. It keeps regions, products, prices, wholesale stock, and the admin account from `ADMIN_EMAIL`. Toronto is Sunday Service by Caked, 1196 Queen St W, Sundays 12:00–6:00 PM ET. Vancouver is Dank Club, 6416 Main St. If `DATABASE_URL` is missing, the build still succeeds and the site shows a setup screen instead of erroring.
 
    `npm run db:setup` remains available for a local database.
 
@@ -60,7 +60,7 @@ npm run db:setup
 npm run dev
 ```
 
-With Clerk keys absent and `ALLOW_DEV_PREVIEW=true`, `/sign-in` lists seeded personas (collector, pending account, wholesale applicant, wholesale buyer, admin). That path does not exist in production. With Clerk keys present, sign-in is Clerk only.
+With Clerk keys absent and `ALLOW_DEV_PREVIEW=true`, `/sign-in` lists accounts already in the local database. The seed does not create sample people. That path does not exist in production. With Clerk keys present, sign-in is Clerk only.
 
 ```bash
 npm test

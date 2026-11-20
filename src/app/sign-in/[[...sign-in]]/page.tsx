@@ -43,7 +43,7 @@ export default async function SignInPage({
       {accounts.length > 0 ? (
         <>
           <p className="mt-4 text-sm leading-relaxed text-mute">
-            Clerk is not configured on this machine. These seeded personas exist only for local preview
+            Clerk is not configured on this machine. These local accounts exist only for preview
             and are ignored in production.
           </p>
           <ul className="mt-8 divide-y divide-ink border-y border-ink">

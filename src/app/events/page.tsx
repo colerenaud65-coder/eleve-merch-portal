@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { FirstDrop } from "@/components/first-drop";
+import { getCurrentAccount } from "@/server/auth";
 import { readGate } from "@/server/gate";
-import { listEventsForRegion } from "@/server/queries";
+import { getRegionBySlug, listEventsForRegion } from "@/server/queries";
 import { formatWhen, preorderPhase } from "@/server/time";
 
 export const metadata = { title: "Drops" };
@@ -15,7 +17,10 @@ const phaseCopy = {
 
 export default async function EventsPage() {
   const gate = await readGate();
-  const drops = gate ? await listEventsForRegion(gate.regionSlug) : [];
+  const drops = gate ? await listEventsForRegion(gate.regionSlug).catch(() => []) : [];
+  const region = gate ? await getRegionBySlug(gate.regionSlug).catch(() => null) : null;
+  const account = await getCurrentAccount().catch(() => null);
+  const place = region ? [region.venue, region.address, region.hours].filter(Boolean).join(" · ") : null;
 
   return (
     <main className="mx-auto max-w-6xl px-5 py-12">
@@ -24,6 +29,9 @@ export default async function EventsPage() {
       <p className="mt-4 max-w-md text-sm text-mute">
         Only this region is on the page. Switch region from the footer if you are collecting somewhere else.
       </p>
+      {drops.length === 0 ? (
+        <FirstDrop place={place} signedIn={Boolean(account)} consented={account?.marketingConsent} />
+      ) : (
       <ul className="mt-10 divide-y divide-ink border-y border-ink">
         {drops.map((event) => {
           const phase = preorderPhase(event);
@@ -42,6 +50,7 @@ export default async function EventsPage() {
           );
         })}
       </ul>
+      )}
     </main>
   );
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { config } from "dotenv";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 config({ path: ".env.local" });
 
@@ -34,10 +34,126 @@ async function eventBySlug(slug: string) {
   return event;
 }
 
+async function ensureOrderFixtures(input: {
+  torontoId: string;
+  vancouverId: string;
+  horseshoeId: string;
+}) {
+  const db = getDb();
+  const now = Date.now();
+  const people = [
+    {
+      email: "pending@eleve.select",
+      name: "Pending collector",
+      role: "popup_customer" as const,
+      status: "pending" as const,
+      regionId: null,
+      approvedAt: null,
+    },
+    {
+      email: "toronto@eleve.select",
+      name: "Toronto collector",
+      role: "popup_customer" as const,
+      status: "approved" as const,
+      regionId: null,
+      approvedAt: new Date(),
+    },
+    {
+      email: "applicant@eleve.select",
+      name: "Wholesale applicant",
+      role: "wholesale_applicant" as const,
+      status: "approved" as const,
+      regionId: null,
+      approvedAt: new Date(),
+    },
+    {
+      email: "buyer@eleve.select",
+      name: "Horseshoe buyer",
+      role: "wholesale_buyer" as const,
+      status: "approved" as const,
+      regionId: input.horseshoeId,
+      approvedAt: new Date(),
+    },
+  ];
+  for (const person of people) {
+    await db.insert(accounts).values(person).onConflictDoNothing({ target: accounts.email });
+  }
+  await db
+    .update(accounts)
+    .set({ role: "wholesale_buyer", status: "approved", regionId: input.horseshoeId, paymentTerms: "deposit" })
+    .where(eq(accounts.email, "buyer@eleve.select"));
+
+  const window = {
+    startsAt: new Date(now + 3 * 24 * 60 * 60 * 1000),
+    endsAt: new Date(now + 3 * 24 * 60 * 60 * 1000 + 6 * 60 * 60 * 1000),
+    preorderOpensAt: new Date(now - 60 * 60 * 1000),
+    preorderClosesAt: new Date(now + 2 * 24 * 60 * 60 * 1000),
+  };
+  await db
+    .insert(events)
+    .values({
+      slug: "test-sunday-service",
+      name: "Sunday Service",
+      regionId: input.torontoId,
+      venue: "Sunday Service by Caked, 1196 Queen St W",
+      city: "Toronto",
+      summary: "Fixture",
+      timeZone: "America/Toronto",
+      ...window,
+      complianceConfirmed: true,
+      complianceConfirmedAt: new Date(),
+      boxOnHand: 16,
+      boxReserved: 0,
+      cancelled: false,
+      archived: false,
+    })
+    .onConflictDoNothing({ target: events.slug });
+  await db
+    .update(events)
+    .set({ ...window, complianceConfirmed: true, cancelled: false, archived: false, boxOnHand: 16, boxReserved: 0 })
+    .where(eq(events.slug, "test-sunday-service"));
+  await db
+    .insert(events)
+    .values({
+      slug: "test-dank-club",
+      name: "Dank Club",
+      regionId: input.vancouverId,
+      venue: "Dank Club, 6416 Main St",
+      city: "Vancouver",
+      summary: "Fixture",
+      timeZone: "America/Vancouver",
+      ...window,
+      complianceConfirmed: false,
+      boxOnHand: 16,
+      boxReserved: 0,
+    })
+    .onConflictDoNothing({ target: events.slug });
+  await db
+    .update(events)
+    .set({ ...window, complianceConfirmed: false, cancelled: false, archived: false, timeZone: "America/Vancouver" })
+    .where(eq(events.slug, "test-dank-club"));
+
+  const sunday = await eventBySlug("test-sunday-service");
+  for (let position = 1; position <= 4; position += 1) {
+    await db
+      .insert(dropStrains)
+      .values({ eventId: sunday.id, position, name: "Cut", jarOnHand: 12, jarReserved: 0 })
+      .onConflictDoUpdate({
+        target: [dropStrains.eventId, dropStrains.position],
+        set: { name: "Cut", jarOnHand: 12, jarReserved: 0 },
+      });
+  }
+}
+
 test("orders keep regions apart and allocate numbered boxes", async () => {
   const toronto = await regionBySlug("toronto");
   const vancouver = await regionBySlug("vancouver");
   const horseshoe = await regionBySlug("on-golden-horseshoe");
+  await ensureOrderFixtures({
+    torontoId: toronto.id,
+    vancouverId: vancouver.id,
+    horseshoeId: horseshoe.id,
+  });
   const collector = await accountByEmail("toronto@eleve.select");
   const pending = await accountByEmail("pending@eleve.select");
   const applicant = await accountByEmail("applicant@eleve.select");
@@ -45,18 +161,8 @@ test("orders keep regions apart and allocate numbered boxes", async () => {
   const box = await productBySlug("selection-box");
   const jar = await productBySlug("jar-7g");
   const set = await productBySlug("selection-of-16");
-  const sunday = (
-    await getDb()
-      .select()
-      .from(events)
-      .where(and(eq(events.regionId, toronto.id), eq(events.cancelled, false), eq(events.complianceConfirmed, true)))
-  ).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0];
-  if (!sunday) throw new Error("Missing Sunday Service drop");
-  await getDb()
-    .update(dropStrains)
-    .set({ name: "Cut" })
-    .where(eq(dropStrains.eventId, sunday.id));
-  const dank = await eventBySlug("dank-club");
+  const sunday = await eventBySlug("test-sunday-service");
+  const dank = await eventBySlug("test-dank-club");
   const unitedStates = await regionBySlug("united-states");
   assert.equal(unitedStates.enabled, false);
 

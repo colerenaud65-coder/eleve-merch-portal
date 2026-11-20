@@ -53,7 +53,7 @@ export default async function ClaimsPage() {
       <section>
         <h2 className="text-[11px] uppercase tracking-[0.2em]">Codes</h2>
         {codes.length === 0 ? (
-          <p className="mt-4 text-sm text-mute">No codes yet.</p>
+          <p className="mt-4 text-sm text-mute">No codes yet. Generate a sheet when the first packages are packed.</p>
         ) : (
           <ul className="mt-4 divide-y divide-ink border-y border-ink text-sm">
             {codes.map((row) => (
@@ -70,7 +70,7 @@ export default async function ClaimsPage() {
                     <>
                       <p>Claimed</p>
                       <p className="text-[11px] uppercase tracking-[0.14em] text-mute">
-                        {row.claimerName ?? row.claimerEmail} · {formatWhen(row.code.claimedAt, "America/Toronto")}
+                        {row.claimerName ?? row.claimerEmail} · {formatWhen(row.code.claimedAt, row.eventTimeZone ?? "America/Toronto")}
                       </p>
                     </>
                   ) : (
