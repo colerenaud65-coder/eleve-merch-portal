@@ -33,6 +33,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     inRegion &&
     row.region.enabled &&
     !row.event.cancelled &&
+    !row.event.archived &&
     account?.status === "approved" &&
     (account.role === "popup_customer" || account.role === "admin");
   const offer = canSeeMenu ? await getDropOffer(row.event.id, row.region.id) : null;
@@ -80,7 +81,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         </p>
       ) : null}
 
-      {inRegion && !canSeeMenu ? (
+      {inRegion && !canSeeMenu && !row.event.archived && !row.event.cancelled && row.region.enabled ? (
         <div className="mt-10 max-w-md border border-ink p-4 text-sm">
           <p>The menu is closed for this account.</p>
           <p className="mt-2 text-mute">
@@ -92,7 +93,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         </div>
       ) : null}
 
-      {row.event.cancelled || !row.region.enabled ? (
+      {row.event.cancelled || row.event.archived || !row.region.enabled ? (
         <p className="mt-10 max-w-md border border-ink p-4 text-sm">This drop is not on the menu.</p>
       ) : null}
 

@@ -1,11 +1,17 @@
 import Link from "next/link";
 
+import { safeNextPath } from "@/lib/next-path";
 import { rememberMarketingConsent } from "@/server/actions";
 import { clerkConfigured } from "@/server/auth";
 
 export const metadata = { title: "Create account" };
 
-export default async function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect_url?: string }>;
+}) {
+  const next = safeNextPath((await searchParams).redirect_url, "/account");
   if (!clerkConfigured()) {
     return (
       <main className="mx-auto max-w-xl px-5 py-12">
@@ -23,7 +29,7 @@ export default async function SignUpPage() {
             Save preference
           </button>
         </form>
-        <Link href="/sign-in" className="btn mt-8">
+        <Link href={`/sign-in?redirect_url=${encodeURIComponent(next)}`} className="btn mt-8">
           Sign in
         </Link>
       </main>
@@ -45,8 +51,9 @@ export default async function SignUpPage() {
       <SignUp
         routing="path"
         path="/sign-up"
-        signInUrl="/sign-in"
-        fallbackRedirectUrl="/account"
+        signInUrl={`/sign-in?redirect_url=${encodeURIComponent(next)}`}
+        forceRedirectUrl={next}
+        fallbackRedirectUrl={next}
         appearance={{
           variables: {
             colorPrimary: "#121212",

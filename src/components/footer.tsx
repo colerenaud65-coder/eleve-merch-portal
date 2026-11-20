@@ -6,7 +6,7 @@ export async function Footer() {
   const gate = await readGate();
 
   return (
-    <footer className="mt-auto border-t border-ink">
+    <footer className="mt-auto border-t border-ink print:hidden">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-6 text-[11px] uppercase tracking-[0.16em] text-mute">
         <p>Élevé Select · 19+ Canada · 21+ United States</p>
         <form action={changeRegion} className="flex flex-wrap items-center gap-2">

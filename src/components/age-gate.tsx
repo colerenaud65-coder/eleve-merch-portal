@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useActionState } from "react";
 
 import { Wordmark } from "@/components/wordmark";
@@ -12,6 +13,7 @@ const regions = [
 
 export function AgeGate() {
   const [state, action, pending] = useActionState(confirmAge, null);
+  const next = usePathname() || "/";
 
   return (
     <main className="flex min-h-dvh flex-col justify-between px-5 py-8 sm:px-12">
@@ -23,6 +25,7 @@ export function AgeGate() {
           the region you enter. Canadian and US stock never share an order.
         </p>
         <form action={action} className="mt-10 space-y-5">
+          <input type="hidden" name="next" value={next} />
           <label>
             Date of birth
             <input name="dob" type="date" required autoComplete="bday" />

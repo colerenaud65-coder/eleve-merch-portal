@@ -50,6 +50,14 @@ export const applicationStatus = pgEnum("application_status", [
   "declined",
 ]);
 
+export const packageKind = pgEnum("package_kind", ["box", "jar"]);
+
+export const rewardKind = pgEnum("reward_kind", ["hat", "tshirt", "hoodie"]);
+
+export const redemptionStatus = pgEnum("redemption_status", ["pending", "fulfilled", "cancelled"]);
+
+export const ledgerReason = pgEnum("ledger_reason", ["claim", "award", "redeem", "refund"]);
+
 export const regions = pgTable("regions", {
   id: uuid("id").primaryKey().defaultRandom(),
   slug: text("slug").notNull().unique(),
@@ -78,6 +86,8 @@ export const accounts = pgTable("accounts", {
   marketingConsent: boolean("marketing_consent").notNull().default(false),
   marketingConsentAt: timestamp("marketing_consent_at", { withTimezone: true }),
   marketingRegionId: uuid("marketing_region_id").references(() => regions.id),
+  lifetimeUnits: integer("lifetime_units").notNull().default(0),
+  pointsBalance: integer("points_balance").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -158,6 +168,7 @@ export const events = pgTable("events", {
   complianceConfirmedAt: timestamp("compliance_confirmed_at", { withTimezone: true }),
   complianceNote: text("compliance_note"),
   cancelled: boolean("cancelled").notNull().default(false),
+  archived: boolean("archived").notNull().default(false),
   boxOnHand: integer("box_on_hand").notNull().default(16),
   boxReserved: integer("box_reserved").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -340,6 +351,43 @@ export const deposits = pgTable("deposits", {
   note: text("note"),
   recordedBy: uuid("recorded_by").references(() => accounts.id),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const claimCodes = pgTable("claim_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: text("code").notNull().unique(),
+  packageKind: packageKind("package_kind").notNull(),
+  eventId: uuid("event_id").references(() => events.id),
+  batchId: uuid("batch_id").notNull(),
+  claimedBy: uuid("claimed_by").references(() => accounts.id),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const redemptions = pgTable("redemptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => accounts.id),
+  reward: rewardKind("reward").notNull(),
+  points: integer("points").notNull(),
+  status: redemptionStatus("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+});
+
+export const pointsLedger = pgTable("points_ledger", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => accounts.id),
+  deltaPoints: integer("delta_points").notNull(),
+  deltaUnits: integer("delta_units").notNull().default(0),
+  reason: ledgerReason("reason").notNull(),
+  claimCodeId: uuid("claim_code_id").references(() => claimCodes.id),
+  redemptionId: uuid("redemption_id").references(() => redemptions.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type Account = typeof accounts.$inferSelect;

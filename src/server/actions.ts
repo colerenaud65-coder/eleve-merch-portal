@@ -19,11 +19,13 @@ import {
   waitlistEntries,
   wholesaleApplications,
 } from "@/db/schema";
+import { safeNextPath } from "@/lib/next-path";
 import { clearDevSession, devPreviewEnabled, getCurrentAccount, setDevSession } from "@/server/auth";
 import { readGate, writeGate } from "@/server/gate";
 import { dollarsToCents } from "@/server/money";
 import { OrderError, cancelOrder, completeOrder, markReady, placeOrder, recordDeposit } from "@/server/orders";
 import { getEventBySlug, getOrderByPickupToken } from "@/server/queries";
+import { cancelRedemption, eventExists, fulfillRedemption, generateClaimBatch, requestRedemption } from "@/server/points";
 import { ageInZone } from "@/server/time";
 
 function failure(error: unknown) {
@@ -63,7 +65,7 @@ export async function confirmAge(_prev: { error?: string } | null, formData: For
     dob,
     confirmedAt: new Date().toISOString(),
   });
-  redirect("/");
+  redirect(safeNextPath(formData.get("next"), "/"));
 }
 
 export async function changeRegion(formData: FormData) {
@@ -90,7 +92,7 @@ export async function devSignIn(formData: FormData) {
     .limit(1);
   if (!account) redirect("/sign-in");
   await setDevSession(account.id);
-  redirect("/account");
+  redirect(safeNextPath(formData.get("next"), "/account"));
 }
 
 export async function signOut() {
@@ -534,6 +536,18 @@ export async function joinWaitlist(formData: FormData) {
   revalidatePath(`/events/${slug}`);
 }
 
+export async function setDropArchived(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const archived = formData.get("archived") === "yes";
+  if (!id) return;
+  await getDb().update(events).set({ archived }).where(eq(events.id, id));
+  revalidatePath("/admin/events");
+  revalidatePath("/admin");
+  revalidatePath("/events");
+  revalidatePath("/");
+}
+
 export async function saveDrop(formData: FormData) {
   await requireAdmin();
   const eventId = String(formData.get("eventId") ?? "");
@@ -560,6 +574,42 @@ export async function saveDrop(formData: FormData) {
   }
   revalidatePath("/admin/events");
   revalidatePath("/events");
+}
+
+export async function generateClaims(formData: FormData) {
+  await requireAdmin();
+  const kind = String(formData.get("packageKind") ?? "");
+  if (kind !== "box" && kind !== "jar") return;
+  const eventId = String(formData.get("eventId") ?? "");
+  const count = Number(formData.get("count") ?? 1);
+  if (!Number.isInteger(count) || count < 1) return;
+  const dropId = eventId && (await eventExists(eventId)) ? eventId : null;
+  const batchId = await generateClaimBatch({ packageKind: kind, eventId: dropId, count });
+  revalidatePath("/admin/claims");
+  redirect(`/admin/claims/print/${batchId}`);
+}
+
+export async function requestReward(formData: FormData) {
+  const account = await requireAccount();
+  const result = await requestRedemption(account.id, String(formData.get("reward") ?? ""));
+  revalidatePath("/account");
+  revalidatePath("/admin/claims");
+  if (result.error) redirect(`/account?reward=${encodeURIComponent(result.error)}`);
+  redirect("/account?reward=requested");
+}
+
+export async function fulfillReward(formData: FormData) {
+  await requireAdmin();
+  await fulfillRedemption(String(formData.get("id") ?? ""));
+  revalidatePath("/admin/claims");
+  revalidatePath("/account");
+}
+
+export async function cancelReward(formData: FormData) {
+  await requireAdmin();
+  await cancelRedemption(String(formData.get("id") ?? ""));
+  revalidatePath("/admin/claims");
+  revalidatePath("/account");
 }
 
 export async function setPaymentTerms(formData: FormData) {

@@ -30,7 +30,7 @@ export default async function HomePage() {
           </h1>
           <p className="mt-6 max-w-md text-sm leading-relaxed text-mute">
             A 4-strain box, 7 g of each strain, and 7 g jars of those same strains. Released at a
-            pop-up, not shipped from a cart. Cole opens the menu after you ask.
+            pop-up, not shipped from a cart. Hats, shirts, and hoodies are point rewards. Other merch is in person at the event.
           </p>
         </div>
         <ol className="grid gap-px border border-ink bg-ink sm:grid-cols-3">

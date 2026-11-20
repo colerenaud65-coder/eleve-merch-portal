@@ -70,6 +70,7 @@ export default async function AdminHome() {
                 {event.name}
                 <span className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-mute">
                   {region.name} · {open.length} open · {rows.length} total
+                  {event.archived ? " · Archived" : ""}
                 </span>
               </span>
               <span className="text-sm">{formatMoney(received, region.currency)} deposited</span>
