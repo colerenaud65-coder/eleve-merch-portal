@@ -1,14 +1,16 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
+import { clerkDevProxyEnabled } from "@/lib/clerk-proxy";
+
 function isClerkPublic(pathname: string) {
+  const devProxy = clerkDevProxyEnabled() && (pathname === "/__clerk" || pathname.startsWith("/__clerk/"));
   return (
     pathname === "/sign-in" ||
     pathname.startsWith("/sign-in/") ||
     pathname === "/sign-up" ||
     pathname.startsWith("/sign-up/") ||
-    pathname === "/__clerk" ||
-    pathname.startsWith("/__clerk/")
+    devProxy
   );
 }
 
@@ -28,9 +30,9 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
     {
       signInUrl: "/sign-in",
       signUpUrl: "/sign-up",
-      // Development keys (pk_test) do not auto-proxy on *.vercel.app.
-      // Same-origin /__clerk keeps the dev-browser handshake first-party so Safari can finish it.
-      frontendApiProxy: { enabled: true },
+      // pk_test_ keys have no first-party Frontend API, so /__clerk keeps the handshake on this origin.
+      // pk_live_ keys use clerk.elevedirect.app directly. enabled: false also blocks Clerk's vercel.app auto-proxy.
+      frontendApiProxy: { enabled: clerkDevProxyEnabled() },
     },
   )(request, event);
 }

@@ -5,6 +5,7 @@ import { Cormorant_Garamond, Outfit } from "next/font/google";
 import { Footer } from "@/components/footer";
 import { GateFrame } from "@/components/gate-frame";
 import { Header } from "@/components/header";
+import { clerkDevProxyEnabled } from "@/lib/clerk-proxy";
 import { readGate } from "@/server/gate";
 import { databaseConfigured } from "@/server/setup";
 
@@ -73,7 +74,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   const { ClerkProvider } = await import("@clerk/nextjs");
   return (
-    <ClerkProvider proxyUrl="/__clerk" signInUrl="/sign-in" signUpUrl="/sign-up">
+    <ClerkProvider
+      {...(clerkDevProxyEnabled() ? { proxyUrl: "/__clerk" } : {})}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+    >
       <html lang="en" className="h-full">
         {body}
       </html>
