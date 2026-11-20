@@ -6,7 +6,7 @@ The previous static site is archived in [`legacy/`](legacy/) and is not served. 
 
 ## What Cole does before this can go live
 
-The project on Vercel is `elevestorefront-wiip`. Deploys come from `main`. Do these in order.
+The project on Vercel is `elevestorefront-wiip`. Production is [https://elevedirect.app](https://elevedirect.app). Deploys come from `main`. Do these in order.
 
 1. **Vercel Pro.** Confirm the project is on Pro. The public site cannot sit behind a login wall.
 2. **Turn off Vercel Authentication on production** if Deployment Protection is on. Otherwise anonymous visitors never reach the age gate. In the project: Settings → Deployment Protection → set Production to off (or only protect Preview).
@@ -34,7 +34,7 @@ The project on Vercel is `elevestorefront-wiip`. Deploys come from `main`. Do th
    - `APP_SECRET` — `openssl rand -base64 32`. Signs the age-gate cookie.
    - `ADMIN_EMAIL` — the inbox you use in Clerk. The first sign-in with this address becomes admin.
    - `ETRANSFER_RECIPIENT` — the real Interac address. Deposits show this on the order. There is no Stripe, Square, or PayPal.
-   - `NEXT_PUBLIC_APP_URL` — the public origin, used inside pickup QR codes. Example: `https://your-domain`.
+   - `NEXT_PUBLIC_APP_URL` — the public origin, used inside pickup and claim QR codes. Production is `https://elevedirect.app`.
    - `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
    - `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
    - `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/account`
