@@ -5,6 +5,7 @@ import {
   accessRequests,
   dropStrains,
   accounts,
+  claimCodes,
   deposits,
   events,
   inventory,
@@ -13,6 +14,7 @@ import {
   orders,
   prices,
   products,
+  redemptions,
   regions,
   selectionLineups,
   waitlistEntries,
@@ -31,7 +33,7 @@ export async function listEventsForRegion(slug: string) {
   return getDb()
     .select()
     .from(events)
-    .where(and(eq(events.regionId, region.id), eq(events.cancelled, false)))
+    .where(and(eq(events.regionId, region.id), eq(events.cancelled, false), eq(events.archived, false)))
     .orderBy(asc(events.startsAt));
 }
 
@@ -414,4 +416,52 @@ export async function getDropOffer(eventId: string, regionId: string) {
 
 export async function listDevAccounts() {
   return getDb().select().from(accounts).orderBy(asc(accounts.email));
+}
+
+export async function listClaimCodes(limit = 200) {
+  const claimer = accounts;
+  return getDb()
+    .select({
+      code: claimCodes,
+      eventName: events.name,
+      claimerName: claimer.name,
+      claimerEmail: claimer.email,
+    })
+    .from(claimCodes)
+    .leftJoin(events, eq(events.id, claimCodes.eventId))
+    .leftJoin(claimer, eq(claimer.id, claimCodes.claimedBy))
+    .orderBy(desc(claimCodes.createdAt))
+    .limit(limit);
+}
+
+export async function listClaimBatch(batchId: string) {
+  return getDb()
+    .select({
+      code: claimCodes,
+      eventName: events.name,
+    })
+    .from(claimCodes)
+    .leftJoin(events, eq(events.id, claimCodes.eventId))
+    .where(eq(claimCodes.batchId, batchId))
+    .orderBy(asc(claimCodes.createdAt));
+}
+
+export async function listRedemptions() {
+  return getDb()
+    .select({
+      redemption: redemptions,
+      accountName: accounts.name,
+      accountEmail: accounts.email,
+    })
+    .from(redemptions)
+    .innerJoin(accounts, eq(accounts.id, redemptions.accountId))
+    .orderBy(desc(redemptions.createdAt));
+}
+
+export async function listRedemptionsForAccount(accountId: string) {
+  return getDb()
+    .select()
+    .from(redemptions)
+    .where(eq(redemptions.accountId, accountId))
+    .orderBy(desc(redemptions.createdAt));
 }

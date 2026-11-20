@@ -1,12 +1,120 @@
 import { asc } from "drizzle-orm";
 
 import { getDb } from "@/db/index";
-import { dropStrains } from "@/db/schema";
-import { saveDrop, saveEvent, saveInventory, setCompliance } from "@/server/actions";
+import { dropStrains, type EventRow } from "@/db/schema";
+import { saveDrop, saveEvent, saveInventory, setCompliance, setDropArchived } from "@/server/actions";
 import { listAllEvents, listInventory, listRetailRegions, listWholesaleRegions } from "@/server/queries";
 import { formatLocalInput, formatWhen, preorderPhase } from "@/server/time";
 
 export const metadata = { title: "Drops" };
+
+type Strain = {
+  eventId: string;
+  position: number;
+  name: string;
+  jarOnHand: number;
+  jarReserved: number;
+};
+
+function DropCard({
+  event,
+  regionName,
+  strains,
+}: {
+  event: EventRow;
+  regionName: string;
+  strains: Strain[];
+}) {
+  return (
+    <article className="border border-ink p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-serif text-3xl">{event.name}</p>
+          <p className="text-sm text-mute">
+            {regionName} · {formatWhen(event.startsAt, event.timeZone)} · {preorderPhase(event)}
+            {event.archived ? " · Archived" : ""}
+          </p>
+        </div>
+        <form action={setDropArchived}>
+          <input type="hidden" name="id" value={event.id} />
+          <input type="hidden" name="archived" value={event.archived ? "no" : "yes"} />
+          <button type="submit" className="secondary">
+            {event.archived ? "Unarchive" : "Archive"}
+          </button>
+        </form>
+      </div>
+      <form action={setCompliance} className="mt-4 grid gap-3">
+        <input type="hidden" name="id" value={event.id} />
+        <label>
+          Compliance note
+          <input name="note" defaultValue={event.complianceNote ?? ""} />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" name="confirmed" value="yes">
+            Confirm compliance
+          </button>
+          <button type="submit" name="confirmed" value="no" className="secondary">
+            Clear flag
+          </button>
+        </div>
+      </form>
+      <form action={saveDrop} className="mt-6 grid gap-6">
+        <input type="hidden" name="eventId" value={event.id} />
+        <fieldset className="grid gap-3">
+          <legend className="text-[11px] uppercase tracking-[0.16em]">4-Strain Box</legend>
+          <p className="text-sm text-mute">7 g of each strain, 28 g total.</p>
+          <label>
+            Box quantity
+            <input name="boxOnHand" type="number" min={event.boxReserved} max={16} defaultValue={event.boxOnHand} />
+          </label>
+          <label>
+            Early access opens
+            <input
+              name="earlyAccessOpensAt"
+              type="datetime-local"
+              defaultValue={formatLocalInput(
+                event.earlyAccessOpensAt ?? new Date(event.preorderOpensAt.getTime() - 3 * 60 * 60 * 1000),
+                event.timeZone,
+              )}
+            />
+          </label>
+          {[1, 2, 3, 4].map((position) => {
+            const strain = strains.find((row) => row.eventId === event.id && row.position === position);
+            return (
+              <label key={position}>
+                Strain {position}
+                <input name={`strain:${position}`} defaultValue={strain?.name ?? ""} />
+              </label>
+            );
+          })}
+        </fieldset>
+        <fieldset className="grid gap-3">
+          <legend className="text-[11px] uppercase tracking-[0.16em]">7 g jar</legend>
+          <p className="text-sm text-mute">Strains are copied from this drop’s box. Set quantity only.</p>
+          {[1, 2, 3, 4].map((position) => {
+            const strain = strains.find((row) => row.eventId === event.id && row.position === position);
+            return (
+              <label key={position}>
+                {strain?.name.trim() || `Strain ${position}`}
+                <input
+                  name={`jars:${position}`}
+                  type="number"
+                  min={strain?.jarReserved ?? 0}
+                  defaultValue={strain?.jarOnHand ?? 0}
+                />
+              </label>
+            );
+          })}
+        </fieldset>
+        <label className="flex items-center gap-2 normal-case tracking-normal">
+          <input type="checkbox" name="cancelled" value="yes" defaultChecked={event.cancelled} />
+          Cancel this week
+        </label>
+        <button type="submit">Save drop</button>
+      </form>
+    </article>
+  );
+}
 
 export default async function AdminEventsPage() {
   const [rows, retail, wholesale, stock] = await Promise.all([
@@ -17,90 +125,30 @@ export default async function AdminEventsPage() {
   ]);
   const wholesaleStock = stock.filter((row) => wholesale.some((region) => region.id === row.region.id));
   const strainRows = await getDb().select().from(dropStrains).orderBy(asc(dropStrains.position));
+  const active = rows.filter((row) => !row.event.archived);
+  const archived = rows.filter((row) => row.event.archived);
 
   return (
     <main className="space-y-12">
       <section>
         <h1 className="font-serif text-5xl">Drops</h1>
         <div className="mt-6 space-y-6">
-          {rows.map(({ event, region }) => (
-            <article key={event.id} className="border border-ink p-4">
-              <p className="font-serif text-3xl">{event.name}</p>
-              <p className="text-sm text-mute">
-                {region.name} · {formatWhen(event.startsAt, event.timeZone)} · {preorderPhase(event)}
-              </p>
-              <form action={setCompliance} className="mt-4 grid gap-3">
-                <input type="hidden" name="id" value={event.id} />
-                <label>
-                  Compliance note
-                  <input name="note" defaultValue={event.complianceNote ?? ""} />
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button type="submit" name="confirmed" value="yes">
-                    Confirm compliance
-                  </button>
-                  <button type="submit" name="confirmed" value="no" className="secondary">
-                    Clear flag
-                  </button>
-                </div>
-              </form>
-              <form action={saveDrop} className="mt-6 grid gap-6">
-                <input type="hidden" name="eventId" value={event.id} />
-                <fieldset className="grid gap-3">
-                  <legend className="text-[11px] uppercase tracking-[0.16em]">4-Strain Box</legend>
-                  <p className="text-sm text-mute">7 g of each strain, 28 g total.</p>
-                  <label>
-                    Box quantity
-                    <input name="boxOnHand" type="number" min={event.boxReserved} max={16} defaultValue={event.boxOnHand} />
-                  </label>
-                  <label>
-                    Early access opens
-                    <input
-                      name="earlyAccessOpensAt"
-                      type="datetime-local"
-                      defaultValue={formatLocalInput(
-                        event.earlyAccessOpensAt ?? new Date(event.preorderOpensAt.getTime() - 3 * 60 * 60 * 1000),
-                        event.timeZone,
-                      )}
-                    />
-                  </label>
-                  {[1, 2, 3, 4].map((position) => {
-                    const strain = strainRows.find((row) => row.eventId === event.id && row.position === position);
-                    return (
-                      <label key={position}>
-                        Strain {position}
-                        <input name={`strain:${position}`} defaultValue={strain?.name ?? ""} />
-                      </label>
-                    );
-                  })}
-                </fieldset>
-                <fieldset className="grid gap-3">
-                  <legend className="text-[11px] uppercase tracking-[0.16em]">7 g jar</legend>
-                  <p className="text-sm text-mute">Strains are copied from this drop’s box. Set quantity only.</p>
-                  {[1, 2, 3, 4].map((position) => {
-                    const strain = strainRows.find((row) => row.eventId === event.id && row.position === position);
-                    return (
-                      <label key={position}>
-                        {strain?.name.trim() || `Strain ${position}`}
-                        <input
-                          name={`jars:${position}`}
-                          type="number"
-                          min={strain?.jarReserved ?? 0}
-                          defaultValue={strain?.jarOnHand ?? 0}
-                        />
-                      </label>
-                    );
-                  })}
-                </fieldset>
-                <label className="flex items-center gap-2 normal-case tracking-normal">
-                  <input type="checkbox" name="cancelled" value="yes" defaultChecked={event.cancelled} />
-                  Cancel this week
-                </label>
-                <button type="submit">Save drop</button>
-              </form>
-            </article>
+          {active.map((row) => (
+            <DropCard key={row.event.id} event={row.event} regionName={row.region.name} strains={strainRows} />
           ))}
         </div>
+        {archived.length > 0 ? (
+          <details className="mt-8 border border-ink p-4">
+            <summary className="cursor-pointer text-[11px] uppercase tracking-[0.2em]">
+              Archived · {archived.length}
+            </summary>
+            <div className="mt-6 space-y-6">
+              {archived.map((row) => (
+                <DropCard key={row.event.id} event={row.event} regionName={row.region.name} strains={strainRows} />
+              ))}
+            </div>
+          </details>
+        ) : null}
       </section>
       <section>
         <h2 className="text-[11px] uppercase tracking-[0.2em]">New drop</h2>

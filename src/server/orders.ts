@@ -152,7 +152,7 @@ async function completePreorder(
   },
 ): Promise<Order> {
   const [event] = await tx.select().from(events).where(eq(events.id, args.eventId)).for("update");
-  if (!event || event.cancelled) throw new OrderError("This drop is not open.", "event");
+  if (!event || event.cancelled || event.archived) throw new OrderError("This drop is not open.", "event");
   const [box] = await tx.select().from(products).where(eq(products.slug, "selection-box")).limit(1);
   const [jar] = await tx.select().from(products).where(eq(products.slug, "jar-7g")).limit(1);
   if (!box || !jar) throw new OrderError("The drop catalog is missing.", "catalog");

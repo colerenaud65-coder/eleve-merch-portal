@@ -2,10 +2,16 @@ import { clerkConfigured, devPreviewEnabled } from "@/server/auth";
 import { devSignIn } from "@/server/actions";
 import { listDevAccounts } from "@/server/queries";
 import { roleLabel } from "@/lib/labels";
+import { safeNextPath } from "@/lib/next-path";
 
 export const metadata = { title: "Sign in" };
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect_url?: string }>;
+}) {
+  const next = safeNextPath((await searchParams).redirect_url, "/account");
   if (clerkConfigured()) {
     const { SignIn } = await import("@clerk/nextjs");
     return (
@@ -13,8 +19,9 @@ export default async function SignInPage() {
         <SignIn
           routing="path"
           path="/sign-in"
-          signUpUrl="/sign-up"
-          fallbackRedirectUrl="/account"
+          signUpUrl={`/sign-up?redirect_url=${encodeURIComponent(next)}`}
+          forceRedirectUrl={next}
+          fallbackRedirectUrl={next}
           appearance={{
             variables: {
               colorPrimary: "#121212",
@@ -50,6 +57,7 @@ export default async function SignInPage() {
                 </div>
                 <form action={devSignIn}>
                   <input type="hidden" name="accountId" value={account.id} />
+                  <input type="hidden" name="next" value={next} />
                   <button type="submit">Enter</button>
                 </form>
               </li>

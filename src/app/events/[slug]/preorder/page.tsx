@@ -14,7 +14,7 @@ export const metadata = { title: "Preorder" };
 export default async function PreorderPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const row = await getEventBySlug(slug);
-  if (!row || row.event.cancelled || !row.region.enabled) notFound();
+  if (!row || row.event.cancelled || row.event.archived || !row.region.enabled) notFound();
   const gate = await readGate();
   const account = await getCurrentAccount();
   if (!account) redirect("/sign-in");

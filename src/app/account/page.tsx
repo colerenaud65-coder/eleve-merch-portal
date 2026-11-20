@@ -2,25 +2,35 @@ import Link from "next/link";
 
 import { SignOut } from "@/components/sign-out";
 import { roleLabel, orderStatusLabel, termsLabel } from "@/lib/labels";
-import { setMarketingConsent } from "@/server/actions";
+import { requestReward, setMarketingConsent } from "@/server/actions";
 import { clerkConfigured, getCurrentAccount } from "@/server/auth";
 import { boxEdition, collectorBoxes, ensureReferralCode, referralCount } from "@/server/growth";
 import { formatMoney } from "@/server/money";
-import { accountApplication, listOrdersForAccount } from "@/server/queries";
+import { REWARDS, unitsTowardNext } from "@/server/points";
+import { accountApplication, listOrdersForAccount, listRedemptionsForAccount } from "@/server/queries";
 import { formatWhen } from "@/server/time";
 import { redirect } from "next/navigation";
 
 export const metadata = { title: "Account", robots: { index: false } };
 
-export default async function AccountPage() {
+const rewardLabel = Object.fromEntries(REWARDS.map((reward) => [reward.id, reward.name]));
+
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reward?: string }>;
+}) {
   const account = await getCurrentAccount();
   if (!account) redirect("/sign-in");
+  const params = await searchParams;
   const orders = account.status === "approved" ? await listOrdersForAccount(account.id) : [];
   const application = await accountApplication(account.id);
   const code = await ensureReferralCode(account.id);
   const referrals = await referralCount(account.id);
   const boxes = await collectorBoxes(account.id);
+  const claimedRewards = await listRedemptionsForAccount(account.id);
   const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  const toward = unitsTowardNext(account.lifetimeUnits);
 
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
@@ -86,6 +96,52 @@ export default async function AccountPage() {
           ))}
         </ul>
       )}
+
+      <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Points</h2>
+      <p className="mt-4 text-sm">
+        {account.pointsBalance} points. {toward} of 16 units toward the next 500.
+      </p>
+      <p className="mt-2 text-sm text-mute">
+        A 4-Strain Box is 4 units. A 7 g jar is 1. Every 16 units adds 500 points. Lifetime units {account.lifetimeUnits}.
+      </p>
+      <Link href="/claim" className="btn secondary mt-4">
+        Scan a package
+      </Link>
+
+      <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Rewards</h2>
+      <p className="mt-4 text-sm text-mute">
+        Hat, T-shirt, and Hoodie are point rewards, handed over in person. Other merch is available at events. Nothing here is for sale online.
+      </p>
+      {params.reward === "requested" ? <p className="mt-3 text-sm">Request sent. Cole hands it over at the event.</p> : null}
+      {params.reward && params.reward !== "requested" ? <p className="mt-3 text-sm">{params.reward}</p> : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {REWARDS.map((reward) =>
+          account.pointsBalance >= reward.points && account.status === "approved" ? (
+            <form key={reward.id} action={requestReward}>
+              <input type="hidden" name="reward" value={reward.id} />
+              <button type="submit">
+                {reward.name} · {reward.points}
+              </button>
+            </form>
+          ) : (
+            <p key={reward.id} className="border border-ink px-4 py-3 text-[11px] uppercase tracking-[0.16em] text-mute">
+              {reward.name} · {reward.points}
+            </p>
+          ),
+        )}
+      </div>
+      {claimedRewards.length > 0 ? (
+        <ul className="mt-4 divide-y divide-ink border-y border-ink text-sm">
+          {claimedRewards.map((reward) => (
+            <li key={reward.id} className="flex justify-between gap-3 py-3">
+              <span>{rewardLabel[reward.reward] ?? reward.reward}</span>
+              <span className="text-mute">
+                {reward.status} · {reward.points} pts
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <h2 className="mt-12 text-[11px] uppercase tracking-[0.2em]">Updates</h2>
       <form action={setMarketingConsent} className="mt-4 space-y-3">

@@ -33,7 +33,7 @@ export async function Header({
     account?.role === "wholesale_buyer" && lockedRegion ? lockedRegion : gate.regionName;
 
   return (
-    <header className="border-b border-ink">
+    <header className="border-b border-ink print:hidden">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-4">
         <Link href="/" className="block" aria-label="Élevé Select">
           <Wordmark priority size={36} />
@@ -45,6 +45,7 @@ export async function Header({
           {account?.role === "wholesale_applicant" ? (
             <Link href="/wholesale/apply">Wholesale</Link>
           ) : null}
+          {account ? <Link href="/claim">Claim</Link> : null}
           {account?.role === "admin" ? <Link href="/admin">Admin</Link> : null}
           <Link href={account ? "/account" : "/sign-in"}>{account ? "Account" : "Sign in"}</Link>
           <span className="text-mute">{place}</span>
