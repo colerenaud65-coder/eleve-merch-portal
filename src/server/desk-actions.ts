@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db/index";
 import { events } from "@/db/schema";
 import { getCurrentAccount } from "@/server/auth";
+import { alertPreview } from "@/server/alerts";
 import { saveWizard, type WizardInput, type WizardResult } from "@/server/desk";
 import { OrderError, completeOrder, markReady, recordDeposit, undoDeposit, undoPickup } from "@/server/orders";
 import { getOrderDetail } from "@/server/queries";
@@ -35,12 +36,13 @@ function refresh(eventId?: string | null) {
 export async function saveDropWizard(input: WizardInput): Promise<WizardResult> {
   await requireAdmin();
   const result = await saveWizard(input);
-  if (result.ok) {
-    refresh(result.id);
-    revalidatePath("/events");
-    revalidatePath("/");
-  }
-  return result;
+  if (!result.ok) return result;
+  refresh(result.id);
+  revalidatePath("/events");
+  revalidatePath("/");
+  if (!input.publish) return result;
+  const alerts = await alertPreview(result.id);
+  return alerts ? { ...result, alerts } : result;
 }
 
 export async function deskMarkDeposit(orderId: string): Promise<{ ok: true; depositId?: string } | { ok: false; error: string }> {

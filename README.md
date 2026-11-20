@@ -42,6 +42,24 @@ The project on Vercel is `elevestorefront-wiip`. Production is [https://elevedir
 
    Leave `ALLOW_DEV_PREVIEW` unset on Vercel. It is ignored whenever `NODE_ENV` is production or `VERCEL_ENV` is set.
 
+   Drop alerts use Resend. These can wait until you are ready to email the opt-in list. If `RESEND_API_KEY` is empty, the desk says “Email not connected yet” and does not send.
+
+   - `RESEND_API_KEY` — from the Resend dashboard.
+   - `ALERTS_FROM` — defaults to `Élevé Select <drops@elevedirect.app>`.
+   - `ALERTS_REPLY_TO` — defaults to `elevecanna@gmail.com`.
+
+   Add the domain `elevedirect.app` in Resend, then copy the records from that domain’s Records tab into Vercel DNS (the project domain `elevedirect.app`, not a separate DNS host). Leave the existing site records and the Clerk `clerk` and `accounts` CNAMEs in place. The exact values are generated for the domain, so paste them from Resend rather than typing them from memory.
+
+   Resend shows one of these two sets:
+
+   | Type | Name | Value |
+   | --- | --- | --- |
+   | TXT | `resend._domainkey` | The DKIM key Resend shows, starting with `p=` |
+   | MX | `send` | Priority 10. Host looks like `feedback-smtp.us-east-1.amazonses.com`. Use the region Resend shows. |
+   | TXT | `send` | `v=spf1 include:amazonses.com ~all` |
+
+   Domains created in Resend after August 2026 may show CNAMEs instead of the MX and SPF pair. In that case add both CNAMEs (`send` and `rsend`) plus the same DKIM TXT. A CNAME cannot share a name with another record. If you do not already have DMARC, add a TXT on `_dmarc` with `v=DMARC1; p=none; rua=mailto:elevecanna@gmail.com`. Verification often finishes within 15 minutes. Send only after the domain shows as verified.
+
 6. **Redeploy** after Neon and Clerk are connected. `vercel.json` sets the framework to Next.js and the build runs migrations and the seed when `DATABASE_URL` is present, then `next build`. You do not need a terminal for `db:setup`. Migration `0005_blank_slate` clears test drops, orders, claim codes, and points once, recorded as `blank_slate_2026_11`, and does not run again. The seed does not create drops, dates, orders, or strains. It keeps regions, products, prices, wholesale stock, and the admin account from `ADMIN_EMAIL`. Toronto is Sunday Service by Caked, 1196 Queen St W, Sundays 12:00–6:00 PM ET. Vancouver is Dank Club, 6416 Main St. If `DATABASE_URL` is missing, the build still succeeds and the site shows a setup screen instead of erroring.
 
    `npm run db:setup` remains available for a local database.

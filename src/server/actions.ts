@@ -517,8 +517,9 @@ export async function setMarketingConsent(formData: FormData) {
     .update(accounts)
     .set({
       marketingConsent: yes,
-      marketingConsentAt: yes ? new Date() : null,
+      marketingConsentAt: yes ? new Date() : account.marketingConsentAt,
       marketingRegionId,
+      unsubscribedAt: yes ? null : new Date(),
     })
     .where(eq(accounts.id, account.id));
   revalidatePath("/account");

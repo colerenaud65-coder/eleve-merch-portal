@@ -4,6 +4,7 @@ import { TORONTO_DROP, VANCOUVER_DROP } from "@/db/catalog";
 import { getDb } from "@/db/index";
 import { dropStrains, events, prices, products, regions } from "@/db/schema";
 import { dollarsToCents } from "@/server/money";
+import type { AlertPreview } from "@/server/alerts";
 import { earlyAccessAt, zonedLocalToUtc } from "@/server/time";
 
 export type DeskStatus = "draft" | "scheduled" | "early" | "live" | "soldout" | "ended";
@@ -79,7 +80,7 @@ export type WizardInput = {
   publish: boolean;
 };
 
-export type WizardResult = { ok: true; id: string } | { ok: false; error: string; field?: string };
+export type WizardResult = { ok: true; id: string; alerts?: AlertPreview } | { ok: false; error: string; field?: string };
 
 function hoursBetween(later: Date, earlier: Date) {
   return Math.round((later.getTime() - earlier.getTime()) / (60 * 60 * 1000));
