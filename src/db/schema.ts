@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -89,6 +90,7 @@ export const accounts = pgTable("accounts", {
   marketingConsent: boolean("marketing_consent").notNull().default(false),
   marketingConsentAt: timestamp("marketing_consent_at", { withTimezone: true }),
   marketingRegionId: uuid("marketing_region_id").references(() => regions.id),
+  unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
   lifetimeUnits: integer("lifetime_units").notNull().default(0),
   pointsBalance: integer("points_balance").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -176,6 +178,21 @@ export const events = pgTable("events", {
   boxReserved: integer("box_reserved").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const dropAlerts = pgTable(
+  "drop_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    recipientCount: integer("recipient_count").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    sentBy: uuid("sent_by").references(() => accounts.id, { onDelete: "set null" }),
+  },
+  (table) => [index("drop_alerts_event_kind").on(table.eventId, table.kind)],
+);
 
 export const dropStrains = pgTable(
   "drop_strains",

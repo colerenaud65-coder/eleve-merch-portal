@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { DropAlerts, type AlertPreview } from "@/components/admin/drop-alerts";
 import { useToast } from "@/components/admin/shell";
 import { saveDropWizard } from "@/server/desk-actions";
 
@@ -56,6 +57,7 @@ export function DropWizard({
   const [error, setError] = useState("");
   const [field, setField] = useState("");
   const [saving, setSaving] = useState<"draft" | "publish" | null>(null);
+  const [published, setPublished] = useState<{ id: string; alerts: AlertPreview } | null>(null);
 
   const selected = cities.find((item) => item.slug === city);
 
@@ -106,8 +108,25 @@ export function DropWizard({
       return;
     }
     toast({ tone: "ok", text: publish ? "Drop is published." : "Draft saved." });
+    if (publish && result.alerts) {
+      setPublished({ id: result.id, alerts: result.alerts });
+      router.refresh();
+      return;
+    }
     router.push("/admin");
     router.refresh();
+  }
+
+  if (published) {
+    return (
+      <div className="grid gap-6">
+        <p className="text-sm">The drop is published.</p>
+        <DropAlerts eventId={published.id} preview={published.alerts} />
+        <button type="button" className="secondary" onClick={() => router.push("/admin")}>
+          Back to the desk
+        </button>
+      </div>
+    );
   }
 
   return (

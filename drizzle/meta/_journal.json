@@ -43,6 +43,13 @@
       "when": 1795141752998,
       "tag": "0005_blank_slate",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795300000000,
+      "tag": "0006_drop_alerts",
+      "breakpoints": true
     }
   ]
 }

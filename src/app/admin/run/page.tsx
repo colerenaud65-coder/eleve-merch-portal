@@ -1,5 +1,7 @@
 import { DeskHeader } from "@/components/admin/desk-header";
+import { DropAlerts } from "@/components/admin/drop-alerts";
 import { RunDesk } from "@/components/admin/run-desk";
+import { alertPreview } from "@/server/alerts";
 import { deskStatus, deskStatusLabel, orderChip } from "@/server/desk";
 import { formatMoney } from "@/server/money";
 import { getDropOffer, getOrderByPickupToken, listAllEvents, listAllOrders } from "@/server/queries";
@@ -25,6 +27,7 @@ export default async function RunPage({
   const offer = await getDropOffer(event.id, event.regionId);
   const jarsLeft = offer.strains.reduce((sum, strain) => sum + Math.max(strain.jarOnHand - strain.jarReserved, 0), 0);
   const status = deskStatus(event, jarsLeft);
+  const alerts = await alertPreview(event.id);
   const orders = await listAllOrders(event.id);
   const stock = [
     {
@@ -61,6 +64,11 @@ export default async function RunPage({
           pickup: order.status !== "cancelled" && order.status !== "completed",
         }))}
       />
+      {alerts ? (
+        <div className="mt-8">
+          <DropAlerts eventId={event.id} preview={alerts} />
+        </div>
+      ) : null}
     </>
   );
 }
